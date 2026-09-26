@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Page Not Found (404){% endblock %}
+
+{% block content %}
+<div class="container section" style="text-align: center; padding: 120px 20px;">
+    <img src="/static/assets/404.svg" alt="404 Not Found" style="width: 140px; height: 140px; margin-bottom: 24px; opacity: 0.85;" onerror="this.src='/static/assets/error_state.svg';">
+    <h1 style="font-size: 2.8rem; font-weight: 800; margin-bottom: 12px;">404 — Property Not Found</h1>
+    <p style="color: var(--text-muted); font-size: 1.1rem; max-width: 500px; margin: 0 auto 32px auto;">
+        The requested property analytical resource or page could not be located in the current inventory space.
+    </p>
+    <a href="/" class="btn btn-primary">
+        <i data-lucide="home"></i> Return to Property Universe
+    </a>
+</div>
+{% endblock %}

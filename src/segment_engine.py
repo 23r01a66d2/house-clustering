@@ -1,8 +1,7 @@
 """
 SEGMENT ENGINE MODULE — Property Community Discovery via K-Means
-Executes K-Means clustering on standardized similarity space.
-Tracks convergence without supervised metrics.
-Fits 2D PCA projection strictly for visual exploration of the Property Landscape.
+Executes K-Means clustering on the standardized similarity space.
+Projects high-dimensional property similarity into a 2D PCA landscape strictly for visualization.
 """
 
 from typing import Tuple, Dict, Any, List, Optional
@@ -19,7 +18,7 @@ class SegmentEngine:
     Discovers natural property communities using K-Means clustering.
     Projects high-dimensional property similarities into a 2D landscape for visualization.
     """
-    def __init__(self, k: int = 2, random_state: int = config.RANDOM_STATE):
+    def __init__(self, k: int = config.K_DEFAULT, random_state: int = config.RANDOM_STATE):
         self.k = k
         self.random_state = random_state
         self.kmeans_model: Optional[KMeans] = None
@@ -66,7 +65,7 @@ class SegmentEngine:
 
         convergence_info = {
             "k": self.k,
-            "inertia": inertia,
+            "inertia": round(inertia, 1),
             "iterations_to_converge": n_iter,
             "silhouette_score": round(sil_score, 4),
             "cluster_counts": cluster_counts,
@@ -80,7 +79,7 @@ class SegmentEngine:
         # 4. Fit 2D PCA Projection Strictly for Visualization
         self.pca_model = PCA(n_components=2, random_state=self.random_state)
         pca_coords = self.pca_model.fit_transform(X_scaled)
-        self.pca_variance_ratio = [float(v) for v in self.pca_model.explained_variance_ratio_]
+        self.pca_variance_ratio = [round(float(v), 4) for v in self.pca_model.explained_variance_ratio_]
 
         # Project cluster centers consistently into the same 2D PCA space
         pca_centroids = self.pca_model.transform(self.kmeans_model.cluster_centers_)
@@ -91,13 +90,14 @@ class SegmentEngine:
             index=clustered_df.index
         )
         pca_df["Cluster"] = cluster_labels
-        if "Price" in clustered_df.columns:
-            pca_df["Price"] = clustered_df["Price"]
-        if "living area" in clustered_df.columns:
-            pca_df["living area"] = clustered_df["living area"]
-        if "number of bedrooms" in clustered_df.columns:
-            pca_df["number of bedrooms"] = clustered_df["number of bedrooms"]
-        if "number of bathrooms" in clustered_df.columns:
-            pca_df["number of bathrooms"] = clustered_df["number of bathrooms"]
+
+        # Attach essential metadata columns for interactive tooltip inspection
+        cols_to_attach = [
+            "property_id", "price", "sqft", "price_per_sqft", "bhk",
+            "numBathrooms", "city_clean", "location", "Status", "typology"
+        ]
+        for c in cols_to_attach:
+            if c in clustered_df.columns:
+                pca_df[c] = clustered_df[c]
 
         return clustered_df, self.kmeans_model, self.pca_model, pca_df, pca_centroids, convergence_info

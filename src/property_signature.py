@@ -8,8 +8,7 @@ from typing import Dict, Any, List, Optional, Union
 import pandas as pd
 import numpy as np
 
-import config
-from src.utils import find_column_by_role
+from src.utils import format_currency
 
 class PropertySignatureEngine:
     """
@@ -18,12 +17,11 @@ class PropertySignatureEngine:
     """
     def __init__(self, reference_df: pd.DataFrame):
         self.df = reference_df
-        self.price_col = find_column_by_role(self.df, "price") or "Price"
-        self.area_col = find_column_by_role(self.df, "living_area") or "living area"
-        self.bed_col = find_column_by_role(self.df, "bedrooms") or "number of bedrooms"
-        self.bath_col = find_column_by_role(self.df, "bathrooms") or "number of bathrooms"
-        self.grade_col = find_column_by_role(self.df, "grade") or "grade of the house"
-        self.year_col = find_column_by_role(self.df, "built_year") or "Built Year"
+        self.price_col = "price"
+        self.area_col = "sqft"
+        self.bed_col = "bhk"
+        self.bath_col = "numBathrooms"
+        self.psqft_col = "price_per_sqft"
 
         # Precompute empirical bounds for min-max relative normalization
         self.bounds = {}
@@ -32,8 +30,7 @@ class PropertySignatureEngine:
             ("area", self.area_col),
             ("bedrooms", self.bed_col),
             ("bathrooms", self.bath_col),
-            ("grade", self.grade_col),
-            ("year", self.year_col),
+            ("psqft", self.psqft_col)
         ]:
             if col in self.df.columns:
                 s = self.df[col].dropna()
@@ -67,67 +64,57 @@ class PropertySignatureEngine:
 
         raw_price = _get_val(self.price_col)
         raw_area = _get_val(self.area_col)
-        raw_beds = _get_val(self.bed_col)
-        raw_baths = _get_val(self.bath_col)
-        raw_grade = _get_val(self.grade_col, 7.0)
-        raw_year = _get_val(self.year_col, 1970.0)
+        raw_beds = _get_val(self.bed_col, 1.0)
+        raw_baths = _get_val(self.bath_col, 1.0)
+        raw_psqft = _get_val(self.psqft_col, raw_price / max(1.0, raw_area))
 
         # Calculate relative indicators (0.0 to 1.0)
         sig_price = self._relative_score(raw_price, "price")
         sig_size = self._relative_score(raw_area, "area")
         sig_beds = self._relative_score(raw_beds, "bedrooms")
         sig_baths = self._relative_score(raw_baths, "bathrooms")
-        sig_grade = self._relative_score(raw_grade, "grade")
-        sig_age = 1.0 - self._relative_score(raw_year, "year")  # Higher score = older property
+        sig_psqft = self._relative_score(raw_psqft, "psqft")
 
         dimensions = [
             {
-                "dimension": "PRICE",
+                "dimension": "RENT BUDGET",
                 "score_pct": int(round(sig_price * 100)),
                 "raw_value": raw_price,
-                "formatted_raw": f"${raw_price:,.0f}",
-                "descriptor": "Relative Price Position",
+                "formatted_raw": f"₹{raw_price:,.0f}/mo",
+                "descriptor": "Relative Monthly Rent Position",
                 "bar": self._render_bar(sig_price)
             },
             {
-                "dimension": "SIZE",
+                "dimension": "LIVING SPACE",
                 "score_pct": int(round(sig_size * 100)),
                 "raw_value": raw_area,
                 "formatted_raw": f"{raw_area:,.0f} sqft",
-                "descriptor": "Relative Living Area Position",
+                "descriptor": "Relative Built-Up Area Position",
                 "bar": self._render_bar(sig_size)
             },
             {
                 "dimension": "BEDROOM CAPACITY",
                 "score_pct": int(round(sig_beds * 100)),
                 "raw_value": raw_beds,
-                "formatted_raw": f"{raw_beds:.1f} beds" if isinstance(raw_beds, float) and not raw_beds.is_integer() else f"{int(raw_beds)} beds",
+                "formatted_raw": f"{int(round(raw_beds))} BHK",
                 "descriptor": "Relative Bedroom Capacity",
                 "bar": self._render_bar(sig_beds)
             },
             {
-                "dimension": "BATHROOM CAPACITY",
+                "dimension": "BATHROOM PROVISION",
                 "score_pct": int(round(sig_baths * 100)),
                 "raw_value": raw_baths,
-                "formatted_raw": f"{raw_baths:.2f} baths",
-                "descriptor": "Relative Bathroom Capacity",
+                "formatted_raw": f"{int(round(raw_baths))} Baths",
+                "descriptor": "Relative Bathroom Provision",
                 "bar": self._render_bar(sig_baths)
             },
             {
-                "dimension": "QUALITY / GRADE",
-                "score_pct": int(round(sig_grade * 100)),
-                "raw_value": raw_grade,
-                "formatted_raw": f"Grade {raw_grade:.1f}/13",
-                "descriptor": "Relative Construction Quality",
-                "bar": self._render_bar(sig_grade)
-            },
-            {
-                "dimension": "AGE PROFILE",
-                "score_pct": int(round(sig_age * 100)),
-                "raw_value": raw_year,
-                "formatted_raw": f"Built {int(raw_year)}",
-                "descriptor": "Relative Structural Age (Higher = Older)",
-                "bar": self._render_bar(sig_age)
+                "dimension": "RENT DENSITY",
+                "score_pct": int(round(sig_psqft * 100)),
+                "raw_value": raw_psqft,
+                "formatted_raw": f"₹{raw_psqft:.1f}/sqft",
+                "descriptor": "Relative Rent per SqFt Density",
+                "bar": self._render_bar(sig_psqft)
             }
         ]
 

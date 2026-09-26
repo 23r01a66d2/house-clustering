@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}System Processing Error (500){% endblock %}
+
+{% block content %}
+<div class="container section" style="text-align: center; padding: 120px 20px;">
+    <img src="/static/assets/error_state.svg" alt="500 Internal Error" style="width: 140px; height: 140px; margin-bottom: 24px;">
+    <h1 style="font-size: 2.8rem; font-weight: 800; margin-bottom: 12px;">500 — Calculation Anomaly</h1>
+    <p style="color: var(--text-muted); font-size: 1.1rem; max-width: 500px; margin: 0 auto 32px auto;">
+        An unexpected condition occurred while projecting property attributes through the analytical pipeline.
+    </p>
+    {% if error_message %}
+    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); color: #FCA5A5; padding: 12px; border-radius: 6px; max-width: 500px; margin: 0 auto 24px auto; font-family: monospace; font-size: 0.85rem;">
+        {{ error_message }}
+    </div>
+    {% endif %}
+    <a href="/" class="btn btn-primary">
+        <i data-lucide="home"></i> Return to Property Universe
+    </a>
+</div>
+{% endblock %}

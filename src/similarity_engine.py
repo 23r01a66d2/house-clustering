@@ -24,14 +24,14 @@ class SimilarityEngine:
         feature_names: List[str]
     ):
         self.scaled_df = scaled_df
-        self.original_df = original_df
+        self.original_df = original_df.copy().reset_index(drop=True)
         self.scaler = scaler
         self.feature_names = feature_names
         self.n_dimensions = len(feature_names)
         
         # Fit NearestNeighbors model on standardized feature space
         self.nn_model = NearestNeighbors(
-            n_neighbors=min(20, len(scaled_df)),
+            n_neighbors=min(25, len(scaled_df)),
             metric="euclidean",
             algorithm="auto"
         )
@@ -48,75 +48,92 @@ class SimilarityEngine:
         
         CRITICAL: Excludes the query property itself from the returned neighbors.
         """
-        # Locate query property index in original DataFrame
-        if "id" in self.original_df.columns:
-            matches = self.original_df.index[self.original_df["id"] == property_id].tolist()
+        matches = []
+        id_col = "property_id" if "property_id" in self.original_df.columns else "id"
+
+        if id_col in self.original_df.columns:
+            try:
+                numeric_id = int(property_id)
+                matches = self.original_df.index[self.original_df[id_col] == numeric_id].tolist()
+            except (ValueError, TypeError):
+                pass
+
             if not matches:
-                # Try integer index fallback
-                try:
-                    p_idx = int(property_id)
-                    if p_idx in self.original_df.index:
-                        matches = [p_idx]
-                except (ValueError, TypeError):
-                    pass
-        else:
-            matches = [int(property_id)] if int(property_id) in self.original_df.index else []
+                matches = self.original_df.index[self.original_df[id_col].astype(str) == str(property_id)].tolist()
+
+        if not matches:
+            try:
+                p_idx = int(property_id)
+                if 0 <= p_idx < len(self.original_df):
+                    matches = [p_idx]
+            except (ValueError, TypeError):
+                matches = []
 
         if not matches:
             raise ValueError(f"Property identifier '{property_id}' not found in dataset.")
 
         query_idx = matches[0]
-        query_scaled = self.scaled_df.loc[[query_idx]].values
-        query_record = self.original_df.loc[query_idx].to_dict()
+        query_scaled = self.scaled_df.iloc[[query_idx]].values
+        query_record = self.original_df.iloc[query_idx].to_dict()
 
-        # Query top_n + 1 to account for self-match
+        # Query top_n + 5 to ensure enough non-self neighbors
         n_to_query = min(top_n + 5, len(self.scaled_df))
         distances, indices = self.nn_model.kneighbors(query_scaled, n_neighbors=n_to_query)
 
         neighbor_results = []
         for dist, idx in zip(distances[0], indices[0]):
-            # CRITICAL REQUIREMENT: Exclude the query property itself
+            # CRITICAL REQUIREMENT: Strictly exclude the query property itself
             if idx == query_idx:
                 continue
 
             neighbor_row = self.original_df.iloc[idx].to_dict()
-            # Standardized Euclidean distance
             euclidean_dist = float(dist)
-            # Normalized similarity index in [0, 1] based on characteristic dimensional scale
             norm_factor = np.sqrt(self.n_dimensions)
             similarity_pct = round(100.0 / (1.0 + (euclidean_dist / norm_factor)), 1)
 
+            p_id = neighbor_row.get("property_id", neighbor_row.get("id", idx + 1))
+            rent_val = float(neighbor_row.get("price", 0))
+
             neighbor_results.append({
-                "index": int(idx),
-                "id": neighbor_row.get("id", idx),
-                "euclidean_distance": round(euclidean_dist, 3),
-                "similarity_index_pct": similarity_pct,
-                "price": float(neighbor_row.get("Price", 0)),
-                "living_area": float(neighbor_row.get("living area", 0)),
-                "bedrooms": float(neighbor_row.get("number of bedrooms", 0)),
-                "bathrooms": float(neighbor_row.get("number of bathrooms", 0)),
-                "grade": float(neighbor_row.get("grade of the house", 0)),
-                "condition": float(neighbor_row.get("condition of the house", 0)),
-                "built_year": int(neighbor_row.get("Built Year", 0)),
-                "cluster": int(neighbor_row.get("Cluster", 0)) if "Cluster" in neighbor_row else None,
-                "segment_name": str(neighbor_row.get("Segment Name", "N/A")),
+                "id": int(p_id),
+                "property_id": int(p_id),
+                "euclidean_distance": round(euclidean_dist, 4),
+                "relative_similarity_pct": similarity_pct,
+                "price": rent_val,
+                "price_formatted": f"₹{rent_val:,.0f}/mo",
+                "sqft": float(neighbor_row.get("sqft", 0)),
+                "bhk": int(round(float(neighbor_row.get("bhk", 1)))),
+                "numBathrooms": float(neighbor_row.get("numBathrooms", 1)),
+                "city": str(neighbor_row.get("city_clean", neighbor_row.get("city", ""))),
+                "location": str(neighbor_row.get("location", "")),
+                "Status": str(neighbor_row.get("Status", "")),
+                "typology": str(neighbor_row.get("typology", "")),
+                "cluster": int(neighbor_row.get("Cluster", 0)),
+                "cluster_name": str(neighbor_row.get("cluster_name", f"Cluster {neighbor_row.get('Cluster', 0)}"))
             })
 
             if len(neighbor_results) >= top_n:
                 break
 
+        query_rent = float(query_record.get("price", 0))
+        q_id = query_record.get("property_id", query_record.get("id", query_idx + 1))
+
         return {
             "query_property": {
-                "index": int(query_idx),
-                "id": query_record.get("id", query_idx),
-                "price": float(query_record.get("Price", 0)),
-                "living_area": float(query_record.get("living area", 0)),
-                "bedrooms": float(query_record.get("number of bedrooms", 0)),
-                "bathrooms": float(query_record.get("number of bathrooms", 0)),
-                "grade": float(query_record.get("grade of the house", 0)),
-                "built_year": int(query_record.get("Built Year", 0)),
-                "segment_name": str(query_record.get("Segment Name", "N/A")),
+                "id": int(q_id),
+                "property_id": int(q_id),
+                "price": query_rent,
+                "price_formatted": f"₹{query_rent:,.0f}/mo",
+                "sqft": float(query_record.get("sqft", 0)),
+                "bhk": int(round(float(query_record.get("bhk", 1)))),
+                "numBathrooms": float(query_record.get("numBathrooms", 1)),
+                "city": str(query_record.get("city_clean", query_record.get("city", ""))),
+                "location": str(query_record.get("location", "")),
+                "Status": str(query_record.get("Status", "")),
+                "typology": str(query_record.get("typology", "")),
+                "cluster": int(query_record.get("Cluster", 0)),
             },
-            "similarity_space_dimensions": self.n_dimensions,
+            "similarity_metric": f"Standardized Euclidean Distance in {self.n_dimensions}D Space",
+            "dimensions_evaluated": self.n_dimensions,
             "similar_properties": neighbor_results
         }

@@ -1,9 +1,9 @@
 """
 PROPERTY MATCHER MODULE — Interactive Segment Assignment
-Transforms new/user-entered property attributes using the ALREADY-FITTED StandardScaler
-and determines the closest property community based on minimum Euclidean distance
-to learned K-Means cluster centroids.
-Validates inputs against empirical dataset bounds to warn of extreme out-of-distribution entries.
+Transforms new/user-entered property attributes using the ALREADY-FITTED log1p and StandardScaler.
+Determines the closest property community based on minimum Euclidean distance to learned K-Means centroids.
+Reuses the pre-fitted pipeline without any refitting.
+Displays zero fake confidence percentages or prediction probabilities.
 """
 
 from typing import Dict, Any, List, Optional, Tuple
@@ -12,7 +12,8 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 
-from src.utils import find_column_by_role
+import config
+from src.utils import format_currency
 
 class PropertyMatcher:
     """
@@ -25,13 +26,15 @@ class PropertyMatcher:
         kmeans_model: KMeans,
         segment_names: Dict[int, str],
         reference_df: pd.DataFrame,
-        feature_names: List[str]
+        feature_names: List[str],
+        log_features: Optional[List[str]] = None
     ):
         self.scaler = scaler
         self.kmeans_model = kmeans_model
         self.segment_names = segment_names
         self.reference_df = reference_df
         self.feature_names = feature_names
+        self.log_features = log_features or list(config.LOG_TRANSFORM_FEATURES)
         self.n_dimensions = len(feature_names)
         
         # Calculate empirical validation bounds from the reference inventory
@@ -53,18 +56,27 @@ class PropertyMatcher:
         Returns explicit warnings for values far outside the 1st-99th percentile range.
         """
         warnings = []
+        labels = {
+            "price": "Monthly Rent",
+            "sqft": "Living Area",
+            "bhk": "Bedrooms (BHK)",
+            "numBathrooms": "Bathrooms",
+            "furnishing_tier": "Furnishing Tier"
+        }
+
         for feat, val in user_inputs.items():
             if feat in self.bounds:
                 b = self.bounds[feat]
+                lbl = labels.get(feat, feat)
                 if val < b["min"] or val > b["max"]:
                     warnings.append(
-                        f"'{feat}' value ({val:,.1f}) is completely outside the dataset observed spectrum "
-                        f"[{b['min']:,.1f} — {b['max']:,.1f}]. Assignment may be skewed."
+                        f"'{lbl}' ({val:,.1f}) is outside the observed dataset range "
+                        f"[{b['min']:,.1f} — {b['max']:,.1f}]."
                     )
                 elif val < b["p01"] or val > b["p99"]:
                     warnings.append(
-                        f"'{feat}' value ({val:,.1f}) falls in the extreme outer 1% tail of the dataset. "
-                        f"Typical range: {b['p01']:,.1f} to {b['p99']:,.1f}."
+                        f"'{lbl}' ({val:,.1f}) falls in the extreme outer 1% tail of the dataset "
+                        f"(typical range: {b['p01']:,.1f} to {b['p99']:,.1f})."
                     )
         return warnings
 
@@ -73,68 +85,118 @@ class PropertyMatcher:
         user_inputs: Dict[str, float]
     ) -> Dict[str, Any]:
         """
-        Transforms user input through the ALREADY-FITTED scaler,
-        computes standardized Euclidean distance to all cluster centroids,
+        Transforms user input through the ALREADY-FITTED pipeline (log1p + StandardScaler),
+        computes Euclidean distance to all learned cluster centroids,
         and assigns the closest segment.
         """
         # Validate inputs first
         validation_warnings = self.validate_inputs(user_inputs)
 
-        # Assemble feature vector matching exact fitted feature ordering
-        feature_vector = []
+        # Assemble raw vector in exact fitted feature order
+        raw_values = []
+        transformed_vector = []
         for feat in self.feature_names:
             if feat in user_inputs:
-                feature_vector.append(float(user_inputs[feat]))
+                raw_val = float(user_inputs[feat])
             elif feat in self.bounds:
-                # Impute with empirical median for unentered secondary attributes
-                feature_vector.append(self.bounds[feat]["median"])
+                raw_val = float(self.bounds[feat]["median"])
             else:
-                feature_vector.append(0.0)
+                raw_val = 0.0
+            
+            raw_values.append(raw_val)
+
+            # Apply log1p if this feature was log-transformed during training
+            if feat in self.log_features:
+                val_trans = float(np.log1p(max(0.0, raw_val)))
+            else:
+                val_trans = raw_val
+            
+            transformed_vector.append(val_trans)
 
         # Standardize using ALREADY-FITTED scaler (Zero refitting)
-        X_input = np.array([feature_vector])
-        X_scaled = self.scaler.transform(X_input)
+        X_df = pd.DataFrame([transformed_vector], columns=self.feature_names)
+        X_scaled = self.scaler.transform(X_df)
 
-        # Compute Euclidean distance to all cluster centers in standardized space
+        # Compute Euclidean distance to all cluster centers in standardized similarity space
         centroids = self.kmeans_model.cluster_centers_
         distances = np.linalg.norm(centroids - X_scaled, axis=1)
 
         assigned_cluster = int(np.argmin(distances))
         min_distance = float(distances[assigned_cluster])
-        matched_segment_name = self.segment_names.get(assigned_cluster, f"Segment {assigned_cluster}")
+        matched_segment_name = self.segment_names.get(assigned_cluster, f"Cluster {assigned_cluster}")
 
         # Inverse transform matched centroid back to original units for "Why This Match?" comparison
-        centroid_orig = self.scaler.inverse_transform([centroids[assigned_cluster]])[0]
-        centroid_dict = dict(zip(self.feature_names, centroid_orig))
+        centroid_scaled = centroids[assigned_cluster]
+        centroid_inv_trans = self.scaler.inverse_transform([centroid_scaled])[0]
+        
+        centroid_orig_units = {}
+        for feat, val in zip(self.feature_names, centroid_inv_trans):
+            if feat in self.log_features:
+                centroid_orig_units[feat] = float(np.expm1(val))
+            else:
+                centroid_orig_units[feat] = float(val)
 
-        # Build comparison details for primary display attributes
-        comparison = []
-        display_roles = ["price", "living_area", "bedrooms", "bathrooms", "grade", "built_year"]
-        for role in display_roles:
-            col_name = find_column_by_role(self.reference_df, role)
-            if col_name and col_name in user_inputs and col_name in centroid_dict:
-                user_val = float(user_inputs[col_name])
-                centroid_val = float(centroid_dict[col_name])
-                diff = user_val - centroid_val
-                pct_diff = (diff / centroid_val * 100.0) if centroid_val != 0 else 0.0
+        # Build comparison details
+        status_names = {0: "Unfurnished", 1: "Semi-Furnished", 2: "Furnished"}
+        furn_val = int(round(user_inputs.get("furnishing_tier", 0)))
 
-                comparison.append({
-                    "attribute": col_name,
-                    "your_property": user_val,
-                    "segment_typical": centroid_val,
-                    "delta": diff,
-                    "delta_pct": pct_diff
-                })
+        comparison = [
+            {
+                "attribute": "Monthly Rent",
+                "your_property": f"₹{float(user_inputs.get('price', 0)):,.0f}/mo",
+                "cluster_typical": f"₹{centroid_orig_units.get('price', 0):,.0f}/mo",
+                "status": "Aligned" if abs(user_inputs.get('price', 0) - centroid_orig_units.get('price', 0)) / max(1, centroid_orig_units.get('price', 0)) < 0.3 else "Variance"
+            },
+            {
+                "attribute": "Living Area",
+                "your_property": f"{float(user_inputs.get('sqft', 0)):,.0f} sqft",
+                "cluster_typical": f"{centroid_orig_units.get('sqft', 0):,.0f} sqft",
+                "status": "Aligned" if abs(user_inputs.get('sqft', 0) - centroid_orig_units.get('sqft', 0)) / max(1, centroid_orig_units.get('sqft', 0)) < 0.3 else "Variance"
+            },
+            {
+                "attribute": "Bedrooms (BHK)",
+                "your_property": f"{int(round(user_inputs.get('bhk', 1)))} BHK",
+                "cluster_typical": f"{int(round(centroid_orig_units.get('bhk', 1)))} BHK",
+                "status": "Identical" if int(round(user_inputs.get('bhk', 1))) == int(round(centroid_orig_units.get('bhk', 1))) else "Adjacent"
+            },
+            {
+                "attribute": "Bathrooms",
+                "your_property": f"{int(round(user_inputs.get('numBathrooms', 1)))} Baths",
+                "cluster_typical": f"{int(round(centroid_orig_units.get('numBathrooms', 1)))} Baths",
+                "status": "Identical" if int(round(user_inputs.get('numBathrooms', 1))) == int(round(centroid_orig_units.get('numBathrooms', 1))) else "Adjacent"
+            },
+            {
+                "attribute": "Furnishing Status",
+                "your_property": status_names.get(furn_val, "Unfurnished"),
+                "cluster_typical": status_names.get(int(round(centroid_orig_units.get("furnishing_tier", 0))), "Unfurnished"),
+                "status": "Identical" if furn_val == int(round(centroid_orig_units.get("furnishing_tier", 0))) else "Different"
+            }
+        ]
+
+        # Calculate distances to all clusters for transparent geometric comparison
+        cluster_distances = []
+        for c_id, d in enumerate(distances):
+            cluster_distances.append({
+                "cluster_id": c_id,
+                "segment_name": self.segment_names.get(c_id, f"Cluster {c_id}"),
+                "standardized_distance": round(float(d), 4),
+                "is_match": c_id == assigned_cluster
+            })
+        cluster_distances.sort(key=lambda x: x["standardized_distance"])
 
         return {
+            "headline": f"Your property is closest to {matched_segment_name}",
             "matched_cluster_id": assigned_cluster,
             "matched_segment_name": matched_segment_name,
-            "distance_to_centroid": round(min_distance, 3),
-            "all_distances": {
-                self.segment_names.get(i, f"Segment {i}"): round(float(d), 3)
-                for i, d in enumerate(distances)
-            },
+            "distance_to_centroid": round(min_distance, 4),
+            "distance_metric": f"Standardized Euclidean Distance in {self.n_dimensions}D Log-Transformed Space",
+            "dimensions_evaluated": self.n_dimensions,
+            "warnings": validation_warnings,
             "comparison": comparison,
-            "validation_warnings": validation_warnings,
-            "dimensionality": self.n_dimensions
+            "all_cluster_distances": cluster_distances,
+            "explanation": (
+                f"In the {self.n_dimensions}-dimensional standardized feature space, your property's Euclidean "
+                f"distance to the '{matched_segment_name}' centroid is {min_distance:.3f}, making it the closest "
+                f"fitted cluster."
+            )
         }

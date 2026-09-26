@@ -88,3 +88,17 @@ def format_number(val, decimals: int = 1) -> str:
         else:
             return f"{val:.{decimals}f}"
     return str(val)
+
+def format_currency(val, decimals: int = 1) -> str:
+    """Format Indian Rupee amounts cleanly (e.g. ₹25K, ₹1.5L, ₹1.2Cr)."""
+    if pd.isna(val):
+        return "N/A"
+    val = float(val)
+    if abs(val) >= 10_000_000:
+        return f"₹{val / 10_000_000:.{decimals}f} Cr"
+    elif abs(val) >= 100_000:
+        return f"₹{val / 100_000:.{decimals}f} L"
+    elif abs(val) >= 1_000:
+        return f"₹{val / 1_000:.0f}K"
+    else:
+        return f"₹{val:,.0f}"

@@ -1,0 +1,259 @@
+{% extends "base.html" %}
+
+{% block title %}K-Means Clustering — Property Intelligence{% endblock %}
+
+{% block content %}
+<div class="container section">
+    <!-- Clustering Header -->
+    <div style="margin-bottom: 44px;">
+        <div class="section-tag">Unsupervised Machine Learning with Python</div>
+        <h1 style="font-size: 2.4rem; font-weight: 800; margin-bottom: 12px;">K-Means Clustering</h1>
+        <p style="color: var(--text-muted); font-size: 1.1rem; max-width: 840px; line-height: 1.6;">
+            Partitioning multi-attribute residential housing data into natural property communities using unsupervised K-Means clustering on standardized continuous feature space.
+        </p>
+
+        <!-- Quick Status Pills -->
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px;">
+            <span style="background: rgba(16, 185, 129, 0.12); border: 1px solid var(--emerald); color: var(--emerald); padding: 6px 14px; border-radius: var(--radius-full); font-size: 0.85rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                <i data-lucide="check-circle-2" style="width: 14px; height: 14px;"></i>
+                Selected K = {{ recommended_k }} Communities
+            </span>
+            <span style="background: rgba(56, 189, 248, 0.12); border: 1px solid #38BDF8; color: #38BDF8; padding: 6px 14px; border-radius: var(--radius-full); font-size: 0.85rem; font-weight: 600;">
+                {{ n_features }}-Dimensional Similarity Space
+            </span>
+            <span style="background: rgba(245, 158, 11, 0.12); border: 1px solid #F59E0B; color: #F59E0B; padding: 6px 14px; border-radius: var(--radius-full); font-size: 0.85rem; font-weight: 600;">
+                StandardScaler (Zero Leakage)
+            </span>
+            <span style="background: rgba(148, 163, 184, 0.12); border: 1px solid var(--border); color: var(--text-muted); padding: 6px 14px; border-radius: var(--radius-full); font-size: 0.85rem; font-weight: 600;">
+                Converged in {{ conv_info.iterations_to_converge }} Iterations
+            </span>
+        </div>
+    </div>
+
+    <!-- 1. COMPACT ML WORKFLOW SECTION -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px; margin-bottom: 48px;">
+        <div style="margin-bottom: 24px;">
+            <div class="section-tag" style="margin-bottom: 6px;">Pipeline Architecture</div>
+            <h2 style="font-size: 1.45rem; font-weight: 800; margin-bottom: 6px;">Machine Learning Clustering Workflow</h2>
+            <p style="color: var(--text-muted); font-size: 0.92rem;">
+                Compact end-to-end unsupervised pipeline executed in Python using Scikit-Learn:
+            </p>
+        </div>
+
+        <!-- Workflow Visual Grid / Flow -->
+        <div class="ml-workflow-grid">
+            <div class="workflow-step-card">
+                <div class="workflow-step-number">01</div>
+                <div class="workflow-step-title">Housing Dataset</div>
+                <div class="workflow-step-desc">
+                    {{ "{:,}".format(total_properties) }} rental property records loaded from the processed dataset.
+                </div>
+            </div>
+
+            <div class="workflow-step-arrow">→</div>
+
+            <div class="workflow-step-card">
+                <div class="workflow-step-number">02</div>
+                <div class="workflow-step-title">Feature Selection</div>
+                <div class="workflow-step-desc">
+                    {{ n_features }} continuous physical & economic attributes (IDs excluded).
+                </div>
+            </div>
+
+            <div class="workflow-step-arrow">→</div>
+
+            <div class="workflow-step-card">
+                <div class="workflow-step-number">03</div>
+                <div class="workflow-step-title">Standardization</div>
+                <div class="workflow-step-desc">
+                    StandardScaler aligns disparate units to zero mean, unit variance: \(z = \frac{x - \mu}{\sigma}\).
+                </div>
+            </div>
+
+            <div class="workflow-step-arrow">→</div>
+
+            <div class="workflow-step-card">
+                <div class="workflow-step-number">04</div>
+                <div class="workflow-step-title">Optimal K Selection</div>
+                <div class="workflow-step-desc">
+                    Elbow Inertia inflection & Silhouette Score evaluation across \(K = 2 \dots 10\).
+                </div>
+            </div>
+
+            <div class="workflow-step-arrow">→</div>
+
+            <div class="workflow-step-card">
+                <div class="workflow-step-number">05</div>
+                <div class="workflow-step-title">K-Means Clustering</div>
+                <div class="workflow-step-desc">
+                    Lloyd's algorithm iteratively minimizes Within-Cluster Sum of Squares (Inertia).
+                </div>
+            </div>
+
+            <div class="workflow-step-arrow">→</div>
+
+            <div class="workflow-step-card highlight">
+                <div class="workflow-step-number">06</div>
+                <div class="workflow-step-title">House Clusters</div>
+                <div class="workflow-step-desc">
+                    {{ segment_names|length }} discovered clusters with distinct Segment DNA profiles.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. OPTIMAL K DISCOVERY RESULTS (Elbow Method & Silhouette Score) -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 36px; margin-bottom: 48px;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px; flex-wrap: wrap; gap: 16px;">
+            <div>
+                <div class="section-tag" style="margin-bottom: 6px;">Evaluation Metrics</div>
+                <h2 style="font-size: 1.55rem; font-weight: 800; margin-bottom: 6px;">Optimal K Selection: Elbow Method & Silhouette Score</h2>
+                <p style="color: var(--text-muted); font-size: 0.95rem; max-width: 720px;">
+                    Evaluating cluster compactness (Within-Cluster Sum of Squares / Inertia) and inter-cluster separation (Silhouette Coefficient) across candidate partitions \(K = 2\) through \(10\).
+                </p>
+            </div>
+            <div style="text-align: right;">
+                <span style="background: rgba(16, 185, 129, 0.15); border: 1px solid var(--emerald); color: var(--emerald); padding: 8px 16px; border-radius: var(--radius-full); font-weight: 800; font-size: 0.92rem; display: inline-flex; align-items: center; gap: 6px;">
+                    <i data-lucide="check"></i> Optimal K = {{ recommended_k }}
+                </span>
+            </div>
+        </div>
+
+        <!-- Evaluation Results KPI Strip -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+                <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Selected Partition</div>
+                <div style="font-size: 1.6rem; font-weight: 800; color: var(--emerald); margin-top: 4px;">K = {{ recommended_k }}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Optimal balance of cohesion & separation</div>
+            </div>
+            <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+                <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Elbow Inflection</div>
+                <div style="font-size: 1.6rem; font-weight: 800; color: #F59E0B; margin-top: 4px;">K = {{ k_meta.elbow_k }}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Point of maximum curvature in WCSS</div>
+            </div>
+            <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+                <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Silhouette at K={{ recommended_k }}</div>
+                <div style="font-size: 1.6rem; font-weight: 800; color: var(--emerald); margin-top: 4px;">{{ "{:.4f}".format(conv_info.silhouette_score) }}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Cluster separation at selected K</div>
+            </div>
+            <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+                <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Highest Tested Silhouette</div>
+                <div style="font-size: 1.6rem; font-weight: 800; color: #38BDF8; margin-top: 4px;">{{ "{:.4f}".format(k_meta.highest_sil_score) }}</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Observed at binary partition K={{ k_meta.highest_sil_k }}</div>
+            </div>
+            <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px;">
+                <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase; font-weight: 700;">Convergence Speed</div>
+                <div style="font-size: 1.6rem; font-weight: 800; color: #FFF; margin-top: 4px;">{{ conv_info.iterations_to_converge }} Iters</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Tolerance stabilized at 1e-4</div>
+            </div>
+        </div>
+
+        <!-- Rationale Callout -->
+        <div style="background: rgba(15, 23, 42, 0.85); border-left: 4px solid var(--emerald); padding: 16px 20px; border-radius: 4px; margin-bottom: 28px; font-size: 0.92rem; color: #CBD5E1; border: 1px solid var(--border);">
+            <strong style="color: #FFF;">Analytical Selection Rationale:</strong> {{ k_meta.rationale }}
+        </div>
+
+        <!-- Plotly Charts Grid -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 24px;">
+            <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px;">
+                <div id="elbowChart" style="width: 100%; height: 350px;"></div>
+                <div style="font-size: 0.75rem; color: var(--text-dim); text-align: center; margin-top: 8px;">
+                    *WCSS measures within-cluster variance: \(\sum_{k=1}^K \sum_{x \in S_k} \|x - \mu_k\|^2\)
+                </div>
+            </div>
+            <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px;">
+                <div id="silhouetteChart" style="width: 100%; height: 350px;"></div>
+                <div style="font-size: 0.75rem; color: var(--text-dim); text-align: center; margin-top: 8px;">
+                    *Silhouette Coefficient \(s(i) = \frac{b(i) - a(i)}{\max(a(i), b(i))}\) measures separation vs cohesion
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. INTERACTIVE K-MEANS ALGORITHM EXPLANATION -->
+    <div class="stepper-container" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 36px; margin-bottom: 48px;">
+        <div style="margin-bottom: 24px;">
+            <div class="section-tag" style="margin-bottom: 6px;">Lloyd's Optimization Algorithm</div>
+            <h2 style="font-size: 1.55rem; font-weight: 800; margin-bottom: 6px;">How K-Means Discovers Property Clusters</h2>
+            <p style="color: var(--text-muted); font-size: 0.92rem;">
+                Step through the iterative optimization mechanics of K-Means clustering below:
+            </p>
+        </div>
+
+        <div class="stepper-nav">
+            <div class="step-indicator active" data-step="1" onclick="goToStep(1)">
+                <span class="step-num" style="width: 28px; height: 28px; font-size: 0.85rem;">1</span>
+                <span>Initialize Centers</span>
+            </div>
+            <div class="step-indicator" data-step="2" onclick="goToStep(2)">
+                <span class="step-num" style="width: 28px; height: 28px; font-size: 0.85rem;">2</span>
+                <span>Assign Properties</span>
+            </div>
+            <div class="step-indicator" data-step="3" onclick="goToStep(3)">
+                <span class="step-num" style="width: 28px; height: 28px; font-size: 0.85rem;">3</span>
+                <span>Recalculate Centers</span>
+            </div>
+            <div class="step-indicator" data-step="4" onclick="goToStep(4)">
+                <span class="step-num" style="width: 28px; height: 28px; font-size: 0.85rem;">4</span>
+                <span>Stabilize Clusters</span>
+            </div>
+        </div>
+
+        <!-- Step Visual Content Display -->
+        <div id="stepVisualBox" style="background: var(--bg-dark); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 28px; min-height: 200px; display: flex; flex-direction: column; justify-content: center;">
+            <div id="stepContent">
+                <!-- Dynamically updated by JS -->
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+            <button id="prevStepBtn" class="btn btn-outline btn-sm" onclick="stepPrev()" disabled>
+                <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i> Previous Step
+            </button>
+            <span style="font-size: 0.78rem; color: var(--text-dim);">
+                *Illustrative demonstration: Lloyd's algorithm iteratively alternates between assignment and update steps until cluster assignments stabilize.
+            </span>
+            <button id="nextStepBtn" class="btn btn-primary btn-sm" onclick="stepNext()">
+                Next Step <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- 4. 2D PCA CLUSTER VISUALIZATION -->
+    <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 36px;">
+        <div style="margin-bottom: 24px;">
+            <div class="section-tag" style="margin-bottom: 6px;">Dimensionality Reduction</div>
+            <h2 style="font-size: 1.6rem; font-weight: 800; margin-bottom: 8px;">2D PCA Cluster Visualization</h2>
+            
+            <!-- MANDATORY VISUALIZATION-ONLY DISCLAIMER BANNER -->
+            <div style="background: rgba(15, 23, 42, 0.85); border-left: 4px solid var(--teal); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px 20px; margin-top: 16px; margin-bottom: 20px;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--teal); margin-bottom: 6px; font-size: 0.9rem;">
+                    <i data-lucide="info" style="width: 16px; height: 16px;"></i>
+                    <span>VISUALIZATION PROJECTION ONLY — NOT THE CLUSTERING SPACE</span>
+                </div>
+                <p style="color: var(--text-muted); font-size: 0.9rem; line-height: 1.6; margin: 0;">
+                    <strong>PCA is used only for 2D visualization. K-Means clustering is performed in the full standardized selected-feature space.</strong> 
+                    Principal Component Analysis (PCA) is utilized strictly for visual projection, compressing the high-dimensional similarity space into two orthogonal axes (PC1: {{ pca_variance[0] }}% variance, PC2: {{ pca_variance[1] }}% variance; Total {{ "{:.1f}".format(pca_variance[0] + pca_variance[1]) }}% explained variance) to illustrate cluster partitions and centroid separations on a 2D plane.
+                </p>
+            </div>
+        </div>
+
+        <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 20px;">
+            <div id="pcaLandscapePlot" style="width: 100%; height: 580px;"></div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--border);">
+            <div style="font-size: 0.85rem; color: var(--text-muted);">
+                Ready to explore the characteristic fingerprints of these communities?
+            </div>
+            <a href="/compare" class="btn btn-primary btn-sm">
+                View Cluster Analysis & DNA <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/clusters.js') }}?v={{ cache_buster }}"></script>
+{% endblock %}

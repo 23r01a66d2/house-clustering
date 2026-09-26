@@ -1,6 +1,7 @@
 """
 PROPERTY DATA MODULE — Property Universe Management
-Loads and audits the property inventory without assuming column positions or hardcoding values.
+Loads and audits the Indian rental property inventory dynamically.
+Computes complete empirical spectrums without hardcoded figures.
 """
 
 from pathlib import Path
@@ -13,7 +14,7 @@ from src.utils import find_column_by_role
 
 class PropertyDataLoader:
     """
-    Loads raw housing records and computes high-level inventory statistics
+    Loads processed Indian rental housing records and computes high-level inventory statistics
     for the Property Universe stage.
     """
     def __init__(self, csv_path: Optional[Path] = None):
@@ -24,12 +25,9 @@ class PropertyDataLoader:
     def load_data(self) -> pd.DataFrame:
         """Load dataset from disk with integrity verification."""
         if not self.csv_path.exists():
-            # Check fallback in data folder
-            candidates = list(config.DATA_DIR.glob("*.csv"))
-            if candidates:
-                self.csv_path = candidates[0]
-            else:
-                raise FileNotFoundError(f"Dataset not found at {self.csv_path} or in {config.DATA_DIR}")
+            # Trigger data pipeline if processed file is missing
+            from src.data_pipeline import run_data_pipeline
+            run_data_pipeline(config.RAW_DATA_DIR, self.csv_path)
 
         self.raw_df = pd.read_csv(self.csv_path)
         self._detect_roles()
@@ -44,7 +42,7 @@ class PropertyDataLoader:
     def get_universe_metrics(self) -> Dict[str, Any]:
         """
         Dynamically calculate inventory spectrums and summary indicators
-        directly from the raw dataset. Zero hardcoded figures.
+        directly from the actual dataset. Zero hardcoded figures.
         """
         if self.raw_df is None:
             self.load_data()
@@ -53,16 +51,16 @@ class PropertyDataLoader:
         total_properties = len(df)
         total_attributes = len(df.columns)
 
-        price_col = self.col_roles.get("price")
-        area_col = self.col_roles.get("living_area")
-        bed_col = self.col_roles.get("bedrooms")
-        bath_col = self.col_roles.get("bathrooms")
-        year_col = self.col_roles.get("built_year")
-        lat_col = find_column_by_role(df, "spatial") or "Lattitude"
-        lon_col = "Longitude"
+        price_col = self.col_roles.get("price") or "price"
+        area_col = self.col_roles.get("living_area") or "sqft"
+        bed_col = self.col_roles.get("bedrooms") or "bhk"
+        bath_col = self.col_roles.get("bathrooms") or "numBathrooms"
+        city_col = self.col_roles.get("city") or "city_clean"
+        furnish_col = "furnishing_tier"
+        psqft_col = "price_per_sqft"
 
-        # Dynamically compute Price Spectrum
-        if price_col and price_col in df.columns:
+        # 1. Price Spectrum (Monthly Rent ₹)
+        if price_col in df.columns:
             price_s = df[price_col].dropna()
             price_metrics = {
                 "min": float(price_s.min()),
@@ -75,48 +73,62 @@ class PropertyDataLoader:
         else:
             price_metrics = {"min": 0, "max": 0, "mean": 0, "median": 0, "q25": 0, "q75": 0}
 
-        # Dynamically compute Living Area Spectrum
-        if area_col and area_col in df.columns:
+        # 2. Living Area Spectrum (sqft)
+        if area_col in df.columns:
             area_s = df[area_col].dropna()
             area_metrics = {
                 "min": float(area_s.min()),
                 "max": float(area_s.max()),
                 "mean": float(area_s.mean()),
                 "median": float(area_s.median()),
+                "q25": float(area_s.quantile(0.25)),
+                "q75": float(area_s.quantile(0.75)),
             }
         else:
-            area_metrics = {"min": 0, "max": 0, "mean": 0, "median": 0}
+            area_metrics = {"min": 0, "max": 0, "mean": 0, "median": 0, "q25": 0, "q75": 0}
 
-        # Dynamically compute Built Year Spectrum
-        if year_col and year_col in df.columns:
-            yr_s = df[year_col].dropna()
-            year_metrics = {
-                "min": int(yr_s.min()),
-                "max": int(yr_s.max()),
-                "median": int(yr_s.median()),
+        # 3. Price per Sqft Spectrum
+        if psqft_col in df.columns:
+            psqft_s = df[psqft_col].dropna()
+            psqft_metrics = {
+                "min": float(psqft_s.min()),
+                "max": float(psqft_s.max()),
+                "mean": float(psqft_s.mean()),
+                "median": float(psqft_s.median()),
             }
         else:
-            year_metrics = {"min": 0, "max": 0, "median": 0}
+            psqft_metrics = {"min": 0, "max": 0, "mean": 0, "median": 0}
 
-        # Bedroom and Bathroom Distribution
-        bed_counts = df[bed_col].value_counts().to_dict() if bed_col and bed_col in df.columns else {}
-        avg_beds = float(df[bed_col].mean()) if bed_col and bed_col in df.columns else 0.0
-        avg_baths = float(df[bath_col].mean()) if bath_col and bath_col in df.columns else 0.0
+        # 4. Bedroom and Bathroom Distributions
+        bed_counts = df[bed_col].value_counts().sort_index().to_dict() if bed_col in df.columns else {}
+        avg_beds = float(df[bed_col].mean()) if bed_col in df.columns else 0.0
+        avg_baths = float(df[bath_col].mean()) if bath_col in df.columns else 0.0
 
-        # Spatial Coordinates Coverage
+        # 5. City and Locality Counts
+        city_counts = df[city_col].value_counts().to_dict() if city_col in df.columns else {}
+        locality_count = int(df["location"].nunique()) if "location" in df.columns else 0
+
+        # 6. Furnishing Breakdown
+        status_counts = df["Status"].value_counts().to_dict() if "Status" in df.columns else {}
+
+        # 7. Spatial Coordinates Coverage
         has_coords = False
         coord_bounds = {}
-        if "Lattitude" in df.columns and "Longitude" in df.columns:
+        if "latitude" in df.columns and "longitude" in df.columns:
             has_coords = True
-            valid_coords = df[["Lattitude", "Longitude"]].dropna()
+            # Restrict bounds calculation to valid coordinates
+            valid_mask = df["is_valid_coord"] if "is_valid_coord" in df.columns else pd.Series(True, index=df.index)
+            valid_coords = df[valid_mask][["latitude", "longitude"]].dropna()
             coord_bounds = {
                 "count": len(valid_coords),
-                "min_lat": float(valid_coords["Lattitude"].min()),
-                "max_lat": float(valid_coords["Lattitude"].max()),
-                "min_lon": float(valid_coords["Longitude"].min()),
-                "max_lon": float(valid_coords["Longitude"].max()),
-                "mean_lat": float(valid_coords["Lattitude"].mean()),
-                "mean_lon": float(valid_coords["Longitude"].mean()),
+                "total_rows": len(df),
+                "valid_pct": round(len(valid_coords) / len(df) * 100, 2),
+                "min_lat": float(valid_coords["latitude"].min()),
+                "max_lat": float(valid_coords["latitude"].max()),
+                "min_lon": float(valid_coords["longitude"].min()),
+                "max_lon": float(valid_coords["longitude"].max()),
+                "mean_lat": float(valid_coords["latitude"].mean()),
+                "mean_lon": float(valid_coords["longitude"].mean()),
             }
 
         return {
@@ -125,10 +137,13 @@ class PropertyDataLoader:
             "attribute_names": list(df.columns),
             "price_metrics": price_metrics,
             "area_metrics": area_metrics,
-            "year_metrics": year_metrics,
+            "psqft_metrics": psqft_metrics,
             "bedroom_counts": bed_counts,
-            "avg_bedrooms": avg_beds,
-            "avg_bathrooms": avg_baths,
+            "avg_bedrooms": round(avg_beds, 2),
+            "avg_bathrooms": round(avg_baths, 2),
+            "city_counts": city_counts,
+            "locality_count": locality_count,
+            "furnishing_counts": status_counts,
             "has_coordinates": has_coords,
             "coordinate_bounds": coord_bounds,
             "column_roles": self.col_roles,

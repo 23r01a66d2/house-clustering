@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Indian Rental Property Intelligence{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<section class="hero-section">
+    <div class="container hero-grid">
+        <div>
+            <h1 class="hero-title">
+                Discover the <span>Hidden Structure</span> Behind Indian Rental Properties
+            </h1>
+            <p class="hero-subtitle">
+                Explore residential rentals across Delhi NCR, Mumbai MMR, and Pune. Discover naturally occurring market communities and profile what makes each segment distinct using unsupervised K-Means clustering.
+            </p>
+            <div class="hero-actions">
+                <a href="/explore" class="btn btn-primary">
+                    <i data-lucide="compass"></i>
+                    Explore Properties
+                </a>
+                <a href="/clusters" class="btn btn-outline">
+                    <i data-lucide="layers"></i>
+                    K-Means Clustering
+                </a>
+            </div>
+        </div>
+
+        <div>
+            <div class="hero-preview-card">
+                <span class="preview-badge">K-Means Partitioning</span>
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 44px; height: 44px; border-radius: 8px; background: rgba(16, 185, 129, 0.15); display: flex; align-items: center; justify-content: center; color: var(--emerald);">
+                        <i data-lucide="database"></i>
+                    </div>
+                    <div>
+                        <div style="font-size: 1.1rem; font-weight: 700;">Analyzed Rental Universe</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted);">Standardized {{ n_features }}-Dimensional Similarity Space</div>
+                    </div>
+                </div>
+
+                <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid var(--border); border-radius: 8px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                        <span style="color: var(--text-muted);">Optimal Communities</span>
+                        <strong style="color: var(--emerald);">K = {{ recommended_k }} Clusters</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 6px;">
+                        <span style="color: var(--text-muted);">Monthly Rent Spectrum</span>
+                        <span>₹{{ "{:,.0f}".format(metrics.price_metrics.min) }} — ₹{{ "{:,.0f}".format(metrics.price_metrics.max) }}</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+                        <span style="color: var(--text-muted);">Living Area Spectrum</span>
+                        <span>{{ "{:,.0f}".format(metrics.area_metrics.min) }} — {{ "{:,.0f}".format(metrics.area_metrics.max) }} sqft</span>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+                    {% for c_id, name in segment_names.items() %}
+                    <span style="background: rgba(30, 41, 59, 0.6); border: 1px solid var(--border-light); font-size: 0.72rem; padding: 4px 8px; border-radius: 4px; color: var(--text-muted);">
+                        ● {{ name }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Dynamic Statistics Strip -->
+<section class="stats-strip">
+    <div class="container stats-grid">
+        <div class="stat-item">
+            <div class="stat-value" data-count="{{ metrics.total_properties }}">{{ "{:,}".format(metrics.total_properties) }}</div>
+            <div class="stat-label">Properties Analyzed</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value" data-count="{{ segment_names|length }}">{{ segment_names|length }}</div>
+            <div class="stat-label">Discovered Clusters</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">₹{{ "{:,.0f}".format(metrics.price_metrics.median) }}</div>
+            <div class="stat-label">Median Monthly Rent</div>
+        </div>
+        <div class="stat-item">
+            <div class="stat-value">{{ "{:,.0f}".format(metrics.area_metrics.median) }} sqft</div>
+            <div class="stat-label">Median Living Area</div>
+        </div>
+    </div>
+</section>
+
+<!-- 3 Feature Pillars -->
+<section class="section" style="padding-bottom: 40px;">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-tag">Core Capabilities</div>
+            <h2 class="section-title">What the System Accomplishes</h2>
+            <p class="section-desc">An interactive property exploration platform replacing black-box models with transparent unsupervised clustering.</p>
+        </div>
+
+        <div class="pillars-grid">
+            <div class="pillar-card">
+                <div>
+                    <div class="pillar-icon">
+                        <i data-lucide="search"></i>
+                    </div>
+                    <h3 class="pillar-title">EXPLORE</h3>
+                    <p class="pillar-text">
+                        Filter and inspect individual rental properties across rent, living area, BHK, furnishing status, and city with validated Leaflet mapping.
+                    </p>
+                </div>
+                <a href="/explore" class="pillar-link">
+                    Explore Inventory <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+                </a>
+            </div>
+
+            <div class="pillar-card">
+                <div>
+                    <div class="pillar-icon">
+                        <i data-lucide="network"></i>
+                    </div>
+                    <h3 class="pillar-title">DISCOVER</h3>
+                    <p class="pillar-text">
+                        Use K-Means to identify naturally occurring housing clusters in standardized {{ n_features }}-dimensional similarity space, validated via Elbow and Silhouette scores.
+                    </p>
+                </div>
+                <a href="/clusters" class="pillar-link">
+                    K-Means Clustering <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+                </a>
+            </div>
+
+            <div class="pillar-card">
+                <div>
+                    <div class="pillar-icon">
+                        <i data-lucide="dna"></i>
+                    </div>
+                    <h3 class="pillar-title">UNDERSTAND</h3>
+                    <p class="pillar-text">
+                        Compare discovered segments side-by-side using Segment DNA fingerprints and match arbitrary rental properties to their closest learned cluster.
+                    </p>
+                </div>
+                <a href="/compare" class="pillar-link">
+                    Cluster Analysis <i data-lucide="arrow-right" style="width: 14px; height: 14px;"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Interactive Property Universe Explorer (Plotly) -->
+<section class="section" style="background: var(--bg-card); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); position: relative; z-index: 2;">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-tag">Interactive Visualization</div>
+            <h2 class="section-title">Explore the Rental Universe</h2>
+            <p class="section-desc">
+                Bivariate view of rental property living area versus monthly rent, colored by discovered cluster. Hover over any point to inspect individual characteristics.
+            </p>
+        </div>
+
+        <div style="background: var(--bg-elevated); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; position: relative;">
+            <div id="homeUniversePlot" style="width: 100%; height: 520px;"></div>
+        </div>
+    </div>
+</section>
+
+<!-- Discovered Clusters Preview -->
+<section class="section">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-tag">Cluster Breakdown</div>
+            <h2 class="section-title">Discovered Property Clusters</h2>
+            <p class="section-desc">
+                Natural property clusters discovered through unsupervised K-Means optimization. Titles reflect descriptive market archetypes derived empirically from cluster centroids and data distributions, rather than predefined classes.
+            </p>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 28px;">
+            {% for p in dna_profiles %}
+            <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 28px; border-left: 4px solid {{ color_map[p.cluster_id] }};">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div>
+                        <div style="font-size: 1.25rem; font-weight: 700; color: #FFF;">{{ p.segment_name }}</div>
+                        <span style="font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; font-weight: 600;">Cluster {{ p.cluster_id }}</span>
+                    </div>
+                    <span style="background: rgba(30, 41, 59, 0.8); border: 1px solid var(--border-light); font-size: 0.78rem; font-weight: 600; padding: 4px 10px; border-radius: 999px; color: var(--emerald);">
+                        {{ p.market_share_pct }}% of Market
+                    </span>
+                </div>
+
+                <div style="color: var(--text-muted); font-size: 0.92rem; line-height: 1.5; margin-bottom: 18px;">
+                    Typical rental in this cluster commands <strong>{{ p.price.formatted_median }}/mo</strong> for <strong>{{ p.area.formatted }}</strong>, predominantly in <strong>{{ p.geography.dominant_city }}</strong>.
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: rgba(30, 41, 59, 0.4); border-radius: 8px; padding: 12px; margin-bottom: 20px;">
+                    <div>
+                        <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase;">Median Rent</div>
+                        <div style="font-size: 1.05rem; font-weight: 700; color: #FFF;">{{ p.price.formatted_median }}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase;">Living Area</div>
+                        <div style="font-size: 1.05rem; font-weight: 700; color: #FFF;">{{ p.area.formatted }}</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 0.72rem; color: var(--text-dim); text-transform: uppercase;">Layout & State</div>
+                        <div style="font-size: 0.95rem; font-weight: 700; color: #FFF;">{{ p.specs.bhk_display }} • {{ p.furnishing.dominant_status }}</div>
+                    </div>
+                </div>
+
+                <a href="/compare" class="btn btn-outline btn-sm" style="width: 100%;">
+                    View Cluster Analysis →
+                </a>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</section>
+
+<!-- Scroll-Based Storytelling Journey -->
+<section class="section" style="background: var(--bg-card); border-top: 1px solid var(--border);">
+    <div class="container">
+        <div class="section-header">
+            <div class="section-tag">Analytical Journey</div>
+            <h2 class="section-title">How Property Intelligence Works</h2>
+            <p class="section-desc">A principled unsupervised journey from multi-city Indian rental inventory to distinct property clusters.</p>
+        </div>
+
+        <div class="story-journey">
+            <div class="story-step">
+                <div class="step-num">01</div>
+                <div>
+                    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">Represent Rental Dimensions</h3>
+                    <p style="color: var(--text-muted); font-size: 0.92rem;">
+                        Housing attributes span distinct physical and structural dimensions: Monthly Rent (₹), Living Area (sqft), Bedrooms (BHK), Bathrooms, and Furnishing Status.
+                    </p>
+                </div>
+            </div>
+
+            <div class="story-step">
+                <div class="step-num">02</div>
+                <div>
+                    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">Log-Transform & Standardize Similarity Space</h3>
+                    <p style="color: var(--text-muted); font-size: 0.92rem;">
+                        Because monthly rents follow a heavy right-skewed distribution, log1p transformation stabilizes monetary and area variance before standardizing into an equalized {{ n_features }}-dimensional Euclidean space.
+                    </p>
+                </div>
+            </div>
+
+            <div class="story-step">
+                <div class="step-num">03</div>
+                <div>
+                    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">Discover Natural Housing Clusters</h3>
+                    <p style="color: var(--text-muted); font-size: 0.92rem;">
+                        K-Means iteratively optimizes candidate cluster centers until cluster memberships stabilize, maximizing boundary separation across the rental inventory.
+                    </p>
+                </div>
+            </div>
+
+            <div class="story-step">
+                <div class="step-num">04</div>
+                <div>
+                    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">Profile Cluster DNA & Fingerprints</h3>
+                    <p style="color: var(--text-muted); font-size: 0.92rem;">
+                        Rather than abstract numeric labels, the system profiles empirical distributions of each cluster, generating normalized relative DNA fingerprints and transparent titles.
+                    </p>
+                </div>
+            </div>
+
+            <div class="story-step">
+                <div class="step-num">05</div>
+                <div>
+                    <h3 style="font-size: 1.15rem; font-weight: 700; margin-bottom: 6px;">Interactive Property Matching & Spatial Discovery</h3>
+                    <p style="color: var(--text-muted); font-size: 0.92rem;">
+                        Users can input hypothetical rental properties to discover their closest market cluster and explore the geographic distribution on validated Leaflet maps.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Initialize Home Plotly Scatter Visualization
+    document.addEventListener("DOMContentLoaded", function() {
+        fetch("/api/pca-landscape")
+            .then(res => res.json())
+            .then(data => {
+                const traces = {};
+                data.points.forEach(pt => {
+                    if (!traces[pt.segment_name]) {
+                        traces[pt.segment_name] = {
+                            x: [],
+                            y: [],
+                            text: [],
+                            mode: "markers",
+                            type: "scatter",
+                            name: pt.segment_name,
+                            marker: { color: pt.color, size: 6, opacity: 0.65 }
+                        };
+                    }
+                    traces[pt.segment_name].x.push(pt.sqft);
+                    traces[pt.segment_name].y.push(pt.price);
+                    traces[pt.segment_name].text.push(
+                        `Area: ${pt.sqft.toLocaleString()} sqft<br>Rent: ${pt.price_formatted}<br>Layout: ${pt.bhk} BHK<br>Location: ${pt.location}, ${pt.city}<br>Segment: ${pt.segment_name}`
+                    );
+                });
+
+                const plotData = Object.values(traces);
+                const layout = {
+                    paper_bgcolor: "rgba(0,0,0,0)",
+                    plot_bgcolor: "rgba(15, 23, 42, 0.6)",
+                    font: { color: "#CBD5E1", family: "Plus Jakarta Sans" },
+                    xaxis: { title: "Living Area (sqft)", gridcolor: "#1E293B", zerolinecolor: "#334155" },
+                    yaxis: { title: "Monthly Rent (₹)", gridcolor: "#1E293B", zerolinecolor: "#334155" },
+                    margin: { l: 80, r: 20, t: 20, b: 60 },
+                    legend: { orientation: "h", y: -0.2 }
+                };
+
+                Plotly.newPlot("homeUniversePlot", plotData, layout, { responsive: true, displayModeBar: false });
+            })
+            .catch(err => console.error("Error loading home plot:", err));
+    });
+</script>
+{% endblock %}

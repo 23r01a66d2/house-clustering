@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Explore Properties{% endblock %}
+
+{% block content %}
+<!-- Explore Header -->
+<div class="explore-header-banner">
+    <div class="container">
+        <div style="font-size: 0.8rem; color: var(--emerald); font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px;">
+            Indian Rental Housing Inventory
+        </div>
+        <h1 style="font-size: 2.2rem; font-weight: 800; margin-bottom: 8px;">Explore Rental Properties</h1>
+        <p style="color: var(--text-muted); font-size: 1rem; max-width: 750px;">
+            Filter and inspect multi-attribute rental records across Delhi NCR, Mumbai MMR, and Pune. Examine monthly rent, living area, BHK layout, furnishing status, and assigned cluster community.
+        </p>
+    </div>
+</div>
+
+<!-- Sticky Filter Bar -->
+<div class="filter-bar">
+    <div class="container">
+        <form id="filterForm" class="filter-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) 80px; gap: 12px; align-items: end;">
+            <!-- City Filter -->
+            <div class="filter-group">
+                <label class="filter-label">City</label>
+                <select id="filterCity" class="filter-select">
+                    <option value="All">All Cities</option>
+                    {% for c in cities %}
+                    <option value="{{ c }}">{{ c }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Locality Filter -->
+            <div class="filter-group">
+                <label class="filter-label">Locality</label>
+                <input type="text" id="filterLocation" class="filter-input" placeholder="e.g. Andheri, Wagholi">
+            </div>
+
+            <!-- Max Rent Filter -->
+            <div class="filter-group">
+                <label class="filter-label">Max Rent (₹)</label>
+                <input type="number" id="filterMaxPrice" class="filter-input" placeholder="Any Rent" step="5000">
+            </div>
+
+            <!-- BHK Filter -->
+            <div class="filter-group">
+                <label class="filter-label">BHK</label>
+                <select id="filterBhk" class="filter-select">
+                    <option value="">Any BHK</option>
+                    {% for b in bed_options %}
+                    <option value="{{ b }}">{{ b }} BHK</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Typology Filter -->
+            <div class="filter-group">
+                <label class="filter-label">Property Type</label>
+                <select id="filterTypology" class="filter-select">
+                    <option value="All">All Types</option>
+                    {% for t in typology_options %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Furnishing Filter -->
+            <div class="filter-group">
+                <label class="filter-label">Furnishing</label>
+                <select id="filterFurnishing" class="filter-select">
+                    <option value="All">All Statuses</option>
+                    {% for f in furnishing_options %}
+                    <option value="{{ f }}">{{ f }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Min Area Filter -->
+            <div class="filter-group">
+                <label class="filter-label">Min Area (sqft)</label>
+                <input type="number" id="filterMinArea" class="filter-input" placeholder="Min sqft" step="100">
+            </div>
+
+            <!-- Bathrooms Filter -->
+            <div class="filter-group">
+                <label class="filter-label">Bathrooms</label>
+                <select id="filterBathrooms" class="filter-select">
+                    <option value="">Any Baths</option>
+                    <option value="1">1+ Baths</option>
+                    <option value="2">2+ Baths</option>
+                    <option value="3">3+ Baths</option>
+                    <option value="4">4+ Baths</option>
+                </select>
+            </div>
+
+            <!-- Cluster Segment Filter -->
+            <div class="filter-group">
+                <label class="filter-label">Cluster</label>
+                <select id="filterSegment" class="filter-select">
+                    <option value="">All Clusters</option>
+                    {% for c_id, name in segment_names.items() %}
+                    <option value="{{ c_id }}">{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- Reset Button -->
+            <div>
+                <button type="button" id="resetFiltersBtn" class="btn btn-outline btn-sm" style="width: 100%; height: 38px;">
+                    Reset
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Main Inventory View Section -->
+<section class="explore-inventory-section">
+    <div class="container">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
+            <div id="resultsCount" style="font-size: 0.95rem; color: var(--text-muted); font-weight: 600;">
+                Loading inventory records...
+            </div>
+        </div>
+
+        <!-- Property Cards Grid Container -->
+        <div id="cardsView">
+            <div class="property-cards-grid" id="propertiesContainer">
+                <!-- Skeleton Placeholders -->
+                <div class="skeleton-card"><div class="skeleton-shimmer"></div></div>
+                <div class="skeleton-card"><div class="skeleton-shimmer"></div></div>
+                <div class="skeleton-card"><div class="skeleton-shimmer"></div></div>
+                <div class="skeleton-card"><div class="skeleton-shimmer"></div></div>
+                <div class="skeleton-card"><div class="skeleton-shimmer"></div></div>
+                <div class="skeleton-card"><div class="skeleton-shimmer"></div></div>
+            </div>
+
+            <!-- Empty State Container -->
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <i data-lucide="home" style="width: 48px; height: 48px; color: var(--text-dim); margin-bottom: 16px;"></i>
+                <h3>No Properties Match Your Filters</h3>
+                <p>Try widening your rent range or adjusting the city, BHK, and furnishing filters.</p>
+                <button class="btn btn-outline btn-sm" onclick="document.getElementById('resetFiltersBtn').click();">
+                    Reset All Filters
+                </button>
+            </div>
+
+            <!-- Pagination Controls -->
+            <div id="paginationControls" style="display: flex; justify-content: center; align-items: center; gap: 16px; margin: 40px 0 20px 0; clear: both;">
+                <button id="prevPageBtn" class="btn btn-outline btn-sm" disabled>
+                    <i data-lucide="chevron-left" style="width: 14px; height: 14px;"></i> Previous
+                </button>
+                <span id="pageIndicator" style="font-size: 0.88rem; color: var(--text-muted); font-weight: 600;">
+                    Page 1 of 1
+                </span>
+                <button id="nextPageBtn" class="btn btn-outline btn-sm">
+                    Next <i data-lucide="chevron-right" style="width: 14px; height: 14px;"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Property Distribution Map Section (Strictly below the entire Inventory & Pagination) -->
+<section class="spatial-map-section">
+    <div class="container">
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 16px;">
+                <div>
+                    <div class="section-tag" style="margin-bottom: 6px;">Spatial Intelligence</div>
+                    <h2 style="font-size: 1.5rem; font-weight: 800; margin-bottom: 6px;">Rental Property Distribution Map</h2>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; max-width: 680px;">
+                        Interactive geographic distribution of rental properties across validated Indian coordinates (Delhi NCR, Mumbai MMR, and Pune). Plotting exclusively coordinate-validated listings with OpenStreetMap cartography.
+                    </p>
+                </div>
+                
+                <!-- City Quick-Zoom Controls -->
+                <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                    <span style="font-size: 0.8rem; color: var(--text-dim); font-weight: 600; text-transform: uppercase;">Zoom City:</span>
+                    <button class="btn btn-outline btn-sm city-map-btn active" data-city="All" onclick="zoomMapToCity('All')">All India</button>
+                    <button class="btn btn-outline btn-sm city-map-btn" data-city="Delhi" onclick="zoomMapToCity('Delhi')">Delhi NCR</button>
+                    <button class="btn btn-outline btn-sm city-map-btn" data-city="Mumbai" onclick="zoomMapToCity('Mumbai')">Mumbai MMR</button>
+                    <button class="btn btn-outline btn-sm city-map-btn" data-city="Pune" onclick="zoomMapToCity('Pune')">Pune</button>
+                </div>
+            </div>
+
+            <!-- Cluster Legend -->
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 16px;">
+                {% for c_id, name in segment_names.items() %}
+                <span style="display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: var(--text-muted); background: rgba(30, 41, 59, 0.7); padding: 5px 12px; border-radius: 999px; border: 1px solid var(--border);">
+                    <span style="width: 10px; height: 10px; border-radius: 50%; background: {{ color_map[c_id] }};"></span>
+                    {{ name }}
+                </span>
+                {% endfor %}
+            </div>
+
+            <!-- Map Container -->
+            <div id="leafletMap" style="width: 100%; height: 480px; border-radius: var(--radius-md); border: 1px solid var(--border);"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 0.75rem; color: var(--text-dim);">
+                <span>*Displaying validated spatial sample ({{ "{:,}".format(provenance.valid_record_count) }} coordinate-validated listings). Lat {{ "{:.2f}".format(provenance.bounds.min_lat) }}°–{{ "{:.2f}".format(provenance.bounds.max_lat) }}° N, Lon {{ "{:.2f}".format(provenance.bounds.min_lon) }}°–{{ "{:.2f}".format(provenance.bounds.max_lon) }}° E.</span>
+                <span>OpenStreetMap Contributors (Zero API Key Dependency)</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Property Detail Modal -->
+<div class="modal-overlay" id="propertyModal">
+    <div class="modal-content">
+        <button class="modal-close" id="modalCloseBtn">&times;</button>
+        <div id="modalBody">
+            <!-- Dynamic Content Injected via JS -->
+            <div style="text-align: center; padding: 40px;">Loading property details...</div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/explore.js') }}?v={{ cache_buster }}"></script>
+{% endblock %}

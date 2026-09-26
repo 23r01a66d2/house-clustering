@@ -1,203 +1,224 @@
 """
-SEGMENT DNA MODULE — Visual Fingerprints and Dynamic Segment Profiling
-Extracts empirical cluster statistics, assigns data-driven market segment names,
-and generates visual Segment DNA fingerprints using normalized relative indicators.
+SEGMENT DNA MODULE — Cluster Profiling & Dynamic Segment Archetypes
+Extracts multidimensional statistical profiles for each discovered property community.
+Generates descriptive, data-grounded segment names and radar metrics directly from empirical centroids.
 """
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, Any, List, Optional
 import pandas as pd
 import numpy as np
 
 import config
-from src.utils import find_column_by_role
-from src.property_signature import PropertySignatureEngine
+from src.utils import format_currency
 
 class SegmentDNAProfiler:
     """
-    Analyzes discovered property communities to produce data-driven names,
-    typical metric summaries, and normalized visual DNA fingerprints.
+    Extracts statistical DNA profiles and generates dynamic, meaningful segment archetypes
+    for each discovered property community.
     """
     def __init__(self, clustered_df: pd.DataFrame):
         self.df = clustered_df.copy()
-        self.price_col = find_column_by_role(self.df, "price") or "Price"
-        self.area_col = find_column_by_role(self.df, "living_area") or "living area"
-        self.lot_col = find_column_by_role(self.df, "lot_area") or "lot area"
-        self.bed_col = find_column_by_role(self.df, "bedrooms") or "number of bedrooms"
-        self.bath_col = find_column_by_role(self.df, "bathrooms") or "number of bathrooms"
-        self.floor_col = find_column_by_role(self.df, "floors") or "number of floors"
-        self.grade_col = find_column_by_role(self.df, "grade") or "grade of the house"
-        self.cond_col = find_column_by_role(self.df, "condition") or "condition of the house"
-        self.year_col = find_column_by_role(self.df, "built_year") or "Built Year"
-        
-        self.sig_engine = PropertySignatureEngine(self.df)
-        self.overall_means = {
-            "price": float(self.df[self.price_col].mean()),
-            "area": float(self.df[self.area_col].mean()),
-            "bedrooms": float(self.df[self.bed_col].mean()) if self.bed_col in self.df.columns else 3.0,
-            "bathrooms": float(self.df[self.bath_col].mean()) if self.bath_col in self.df.columns else 2.0,
-            "grade": float(self.df[self.grade_col].mean()) if self.grade_col in self.df.columns else 7.0,
-            "built_year": float(self.df[self.year_col].mean()) if self.year_col in self.df.columns else 1970.0,
-        }
+        self.cluster_col = "Cluster"
 
     def generate_segment_names(self) -> Dict[int, str]:
         """
-        Dynamically derives descriptive segment names based on actual relative
-        percentiles of price, living area, grade, and built year.
-        Zero hardcoded labels.
+        Dynamically derives descriptive segment names based on actual statistical centroids.
+        Evaluates rent level, living area, room count, and furnishing status.
         """
-        cluster_ids = sorted(self.df["Cluster"].unique())
-        means = self.df.groupby("Cluster")[[self.price_col, self.area_col]].mean()
-        
-        price_ranks = means[self.price_col].rank(ascending=True)
-        area_ranks = means[self.area_col].rank(ascending=True)
-        k = len(cluster_ids)
-        
+        clusters = sorted(self.df[self.cluster_col].unique())
         names = {}
-        for c_id in cluster_ids:
-            p_rank = price_ranks.loc[c_id]
-            a_rank = area_ranks.loc[c_id]
-            
-            c_data = self.df[self.df["Cluster"] == c_id]
-            avg_grade = c_data[self.grade_col].mean() if self.grade_col in c_data.columns else 7.0
-            avg_year = c_data[self.year_col].mean() if self.year_col in c_data.columns else 1970.0
 
-            if k == 2:
-                if p_rank == 2:
-                    names[c_id] = "Higher-Priced Spacious Properties"
+        # Compute median statistics per cluster to inform naming
+        profiles = []
+        for c in clusters:
+            sub = self.df[self.df[self.cluster_col] == c]
+            med_rent = float(sub["price"].median())
+            med_sqft = float(sub["sqft"].median())
+            med_bhk = float(sub["bhk"].median())
+            med_baths = float(sub["numBathrooms"].median())
+            pct_furnished = float((sub["furnishing_tier"] == 2).mean() * 100)
+            profiles.append({
+                "cluster": c,
+                "rent": med_rent,
+                "sqft": med_sqft,
+                "bhk": med_bhk,
+                "baths": med_baths,
+                "pct_furnished": pct_furnished
+            })
+
+        # Sort clusters by rent to assign intuitive tiered names
+        sorted_by_rent = sorted(profiles, key=lambda x: x["rent"])
+        total_clusters = len(sorted_by_rent)
+
+        for rank, p in enumerate(sorted_by_rent):
+            c = p["cluster"]
+            rent = p["rent"]
+            sqft = p["sqft"]
+            bhk = p["bhk"]
+            pct_furn = p["pct_furnished"]
+
+            if rent >= 200_000 or (bhk >= 4 and sqft >= 3_500):
+                name = "Luxury Estates & Penthouses"
+            elif rank == 0:
+                if bhk <= 1.5 and rent <= 22_000:
+                    name = "Affordable Compact Living"
                 else:
-                    names[c_id] = "Lower-Priced Compact Properties"
-            elif k == 3:
-                if p_rank == 3:
-                    names[c_id] = "Premium Luxury Residences"
-                elif p_rank == 2:
-                    names[c_id] = "Mid-Tier Balanced Family Homes"
-                else:
-                    names[c_id] = "Economical Compact Properties"
-            elif k == 4:
-                if p_rank == 4:
-                    names[c_id] = "High-End Luxury Estates"
-                elif p_rank == 3:
-                    names[c_id] = "Upper-Middle Family Residences"
-                elif p_rank == 2:
-                    names[c_id] = "Standard Suburban Dwellings"
-                else:
-                    names[c_id] = "Budget Compact Units"
+                    name = "Budget Urban Rentals"
+            elif pct_furn >= 75.0:
+                name = "Turnkey Executive Suites"
+            elif bhk >= 3.0 and rent >= 50_000:
+                name = "Premium Family Residences"
+            elif bhk >= 2.0 and rent <= 35_000:
+                name = "Mid-Market Urban Homes"
+            elif rank == total_clusters - 1:
+                name = "High-End Prestige Living"
+            elif rank == 1:
+                name = "Standard City Residences"
             else:
-                p_ratio = means.loc[c_id, self.price_col] / self.overall_means["price"]
-                a_ratio = means.loc[c_id, self.area_col] / self.overall_means["area"]
-                if p_ratio > 1.3:
-                    p_desc = "Premium High-Value"
-                elif p_ratio < 0.8:
-                    p_desc = "Value-Oriented"
-                else:
-                    p_desc = "Mid-Market"
-                    
-                if a_ratio > 1.2:
-                    a_desc = "Expansive Properties"
-                elif a_ratio < 0.85:
-                    a_desc = "Compact Properties"
-                else:
-                    a_desc = "Balanced Properties"
-                names[c_id] = f"{p_desc} {a_desc}"
+                name = f"Urban Rental Tier {rank + 1}"
+
+            # Ensure uniqueness
+            base_name = name
+            counter = 2
+            while name in names.values():
+                name = f"{base_name} ({counter})"
+                counter += 1
+            names[c] = name
 
         return names
 
-    def extract_segment_dna(self, segment_names: Optional[Dict[int, str]] = None) -> List[Dict[str, Any]]:
+    def extract_segment_dna(self, segment_names: Optional[Dict[int, str]] = None) -> Dict[int, Dict[str, Any]]:
         """
-        Builds the complete Segment DNA portfolio including relative indicator bars,
-        typical traits, market share, and comparative profiles.
+        Calculates comprehensive statistical indicators for each property community.
         """
         if segment_names is None:
             segment_names = self.generate_segment_names()
 
-        total_houses = len(self.df)
-        dna_profiles = []
+        clusters = sorted(self.df[self.cluster_col].unique())
+        total_properties = len(self.df)
+        dna = {}
 
-        for c_id in sorted(self.df["Cluster"].unique()):
-            c_df = self.df[self.df["Cluster"] == c_id]
-            count = len(c_df)
-            share_pct = round((count / total_houses) * 100.0, 1)
+        # Precompute global medians for relative comparison
+        global_rent = float(self.df["price"].median())
+        global_sqft = float(self.df["sqft"].median())
+        global_psqft = float(self.df["price_per_sqft"].median())
 
-            # Empirical averages
-            avg_price = float(c_df[self.price_col].mean())
-            med_price = float(c_df[self.price_col].median())
-            avg_area = float(c_df[self.area_col].mean())
-            avg_beds = float(c_df[self.bed_col].mean()) if self.bed_col in c_df.columns else 0.0
-            avg_baths = float(c_df[self.bath_col].mean()) if self.bath_col in c_df.columns else 0.0
-            avg_grade = float(c_df[self.grade_col].mean()) if self.grade_col in c_df.columns else 0.0
-            avg_cond = float(c_df[self.cond_col].mean()) if self.cond_col in c_df.columns else 0.0
-            avg_year = float(c_df[self.year_col].mean()) if self.year_col in c_df.columns else 0.0
-            avg_lot = float(c_df[self.lot_col].mean()) if self.lot_col in c_df.columns else 0.0
+        for c in clusters:
+            sub = self.df[self.df[self.cluster_col] == c]
+            count = len(sub)
+            share_pct = round((count / total_properties) * 100, 1)
 
-            # Directional relative indicators against overall mean
-            p_dir = "↑ Substantially Higher" if avg_price > self.overall_means["price"] * 1.15 else ("↓ Economical / Lower" if avg_price < self.overall_means["price"] * 0.85 else "→ Typical Market Mean")
-            a_dir = "↑ Expansive / Spacious" if avg_area > self.overall_means["area"] * 1.15 else ("↓ Compact Living" if avg_area < self.overall_means["area"] * 0.85 else "→ Standard Scale")
-            b_dir = "↑ Higher Bedroom Capacity" if avg_beds > self.overall_means["bedrooms"] * 1.1 else ("↓ Compact Layout" if avg_beds < self.overall_means["bedrooms"] * 0.9 else "→ Typical Family Layout")
-            g_dir = "↑ Superior Build Grade" if avg_grade > self.overall_means["grade"] * 1.05 else ("↓ Standard / Economy Build" if avg_grade < self.overall_means["grade"] * 0.95 else "→ Moderate Build Quality")
+            # Price Metrics (Monthly Rent ₹)
+            price_s = sub["price"]
+            med_rent = float(price_s.median())
+            mean_rent = float(price_s.mean())
+            q25_rent = float(price_s.quantile(0.25))
+            q75_rent = float(price_s.quantile(0.75))
 
-            # Generate normalized visual fingerprint using PropertySignatureEngine
-            typical_vector = {
-                self.price_col: avg_price,
-                self.area_col: avg_area,
-                self.bed_col: avg_beds,
-                self.bath_col: avg_baths,
-                self.grade_col: avg_grade,
-                self.year_col: avg_year
-            }
-            sig = self.sig_engine.generate_signature(typical_vector)
+            # Area Metrics (sqft)
+            area_s = sub["sqft"]
+            med_sqft = float(area_s.median())
+            mean_sqft = float(area_s.mean())
 
-            # Build narrative
-            name = segment_names.get(c_id, f"Segment {c_id}")
-            narrative = (
-                f"{name} accounts for {count:,} properties ({share_pct}% of analyzed inventory). "
-                f"Properties in this segment exhibit an average price of ${avg_price:,.0f} "
-                f"(median ${med_price:,.0f}) with typical living quarters spanning {avg_area:,.0f} sqft. "
-                f"Architectural profiles typically offer {avg_beds:.1f} bedrooms and {avg_baths:.2f} bathrooms "
-                f"with an average construction grade of {avg_grade:.1f}/13 and average build year around {int(avg_year)}."
-            )
+            # Price per SqFt
+            psqft_s = sub["price_per_sqft"]
+            med_psqft = float(psqft_s.median())
+            mean_psqft = float(psqft_s.mean())
 
-            dna_profiles.append({
-                "cluster_id": int(c_id),
-                "segment_name": name,
-                "share_pct": share_pct,
+            # Bedrooms & Bathrooms
+            med_bhk = float(sub["bhk"].median())
+            mode_bhk = float(sub["bhk"].mode()[0]) if len(sub["bhk"].mode()) > 0 else med_bhk
+            med_baths = float(sub["numBathrooms"].median())
+
+            # Furnishing Status distribution
+            furn_counts = sub["Status"].value_counts().to_dict()
+            pct_unfurnished = round(float((sub["furnishing_tier"] == 0).mean() * 100), 1)
+            pct_semi = round(float((sub["furnishing_tier"] == 1).mean() * 100), 1)
+            pct_furnished = round(float((sub["furnishing_tier"] == 2).mean() * 100), 1)
+
+            # City distribution
+            city_counts = sub["city_clean"].value_counts().to_dict()
+            city_pcts = {city: round(cnt / count * 100, 1) for city, cnt in city_counts.items()}
+
+            # Typology distribution
+            typology_counts = sub["typology"].value_counts().to_dict()
+            top_typologies = list(typology_counts.keys())[:3]
+
+            # Security Deposit
+            med_deposit = float(sub["deposit_clean"].median())
+            pct_no_deposit = round(float((sub["deposit_clean"] == 0).mean() * 100), 1)
+
+            # Normalized Radar Spectrum (0 to 100)
+            # Clamped relative to empirical bounds for fair visual comparison
+            radar_rent = min(100, max(5, int(round((np.log1p(med_rent) / np.log1p(2_000_000)) * 100))))
+            radar_space = min(100, max(5, int(round((np.log1p(med_sqft) / np.log1p(10_000)) * 100))))
+            radar_beds = min(100, max(10, int(round((med_bhk / 5.0) * 100))))
+            radar_baths = min(100, max(10, int(round((med_baths / 5.0) * 100))))
+            radar_density = min(100, max(5, int(round((med_psqft / 150.0) * 100))))
+            radar_furnishing = int(round(pct_furnished))
+
+            radar_axes = [
+                {"axis": "Rent Budget", "score": radar_rent},
+                {"axis": "Living Area", "score": radar_space},
+                {"axis": "Bedrooms", "score": radar_beds},
+                {"axis": "Bathrooms", "score": radar_baths},
+                {"axis": "Rent / SqFt", "score": radar_density},
+                {"axis": "Furnishing", "score": radar_furnishing}
+            ]
+
+            dna[c] = {
+                "cluster_id": c,
+                "segment_name": segment_names.get(c, f"Cluster {c}"),
                 "property_count": count,
-                "avg_price": avg_price,
-                "median_price": med_price,
-                "avg_living_area": avg_area,
-                "avg_lot_area": avg_lot,
-                "avg_bedrooms": avg_beds,
-                "avg_bathrooms": avg_baths,
-                "avg_grade": avg_grade,
-                "avg_condition": avg_cond,
-                "avg_built_year": avg_year,
-                "traits": {
-                    "Price": p_dir,
-                    "Area": a_dir,
-                    "Bedrooms": b_dir,
-                    "Grade": g_dir,
+                "market_share_pct": share_pct,
+                "price": {
+                    "median": med_rent,
+                    "mean": mean_rent,
+                    "q25": q25_rent,
+                    "q75": q75_rent,
+                    "formatted_median": format_currency(med_rent),
+                    "formatted_mean": format_currency(mean_rent),
+                    "vs_market": f"{((med_rent - global_rent) / global_rent * 100):+.1f}% vs market median"
                 },
-                "fingerprint_dimensions": sig["dimensions"],
-                "narrative": narrative
-            })
-
-        return dna_profiles
-
-    def get_comparison_table(self, segment_names: Optional[Dict[int, str]] = None) -> pd.DataFrame:
-        """Generates a side-by-side comparative profiling table across all segments."""
-        profiles = self.extract_segment_dna(segment_names)
-        data = {}
-        for p in profiles:
-            col_name = f"Segment {p['cluster_id']}: {p['segment_name']}"
-            data[col_name] = {
-                "Market Share": f"{p['share_pct']}% ({p['property_count']:,} homes)",
-                "Average Price": f"${p['avg_price']:,.0f}",
-                "Median Price": f"${p['median_price']:,.0f}",
-                "Average Living Area": f"{p['avg_living_area']:,.0f} sqft",
-                "Average Lot Area": f"{p['avg_lot_area']:,.0f} sqft",
-                "Average Bedrooms": f"{p['avg_bedrooms']:.2f}",
-                "Average Bathrooms": f"{p['avg_bathrooms']:.2f}",
-                "Average Grade": f"{p['avg_grade']:.2f} / 13",
-                "Average Condition": f"{p['avg_condition']:.2f} / 5",
-                "Typical Built Year": f"{int(p['avg_built_year'])}",
+                "area": {
+                    "median": med_sqft,
+                    "mean": mean_sqft,
+                    "formatted": f"{med_sqft:,.0f} sqft",
+                    "vs_market": f"{((med_sqft - global_sqft) / global_sqft * 100):+.1f}% vs market median"
+                },
+                "price_per_sqft": {
+                    "median": med_psqft,
+                    "mean": mean_psqft,
+                    "formatted": f"₹{med_psqft:.1f}/sqft"
+                },
+                "specs": {
+                    "typical_bhk": int(round(med_bhk)),
+                    "bhk_mode": int(round(mode_bhk)),
+                    "typical_bathrooms": int(round(med_baths)),
+                    "bhk_display": f"{int(round(med_bhk))} BHK",
+                    "baths_display": f"{int(round(med_baths))} Baths"
+                },
+                "furnishing": {
+                    "pct_furnished": pct_furnished,
+                    "pct_semi": pct_semi,
+                    "pct_unfurnished": pct_unfurnished,
+                    "dominant_status": sub["Status"].mode()[0] if len(sub["Status"].mode()) > 0 else "Unfurnished"
+                },
+                "geography": {
+                    "city_distribution": city_pcts,
+                    "dominant_city": sub["city_clean"].mode()[0] if len(sub["city_clean"].mode()) > 0 else "Delhi",
+                    "top_localities": sub["location"].value_counts().head(5).to_dict()
+                },
+                "typology": {
+                    "distribution": typology_counts,
+                    "top_typologies": top_typologies
+                },
+                "deposit": {
+                    "median": med_deposit,
+                    "pct_no_deposit": pct_no_deposit,
+                    "formatted": format_currency(med_deposit) if med_deposit > 0 else "No Deposit"
+                },
+                "radar_axes": radar_axes
             }
-        return pd.DataFrame(data)
+
+        return dna
