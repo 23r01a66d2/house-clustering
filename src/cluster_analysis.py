@@ -8,14 +8,16 @@ from typing import Dict, List, Tuple
 import numpy as np
 import pandas as pd
 from src.utils import detect_column_roles, format_number, log_substep
+from src.segment_naming import generate_dynamic_segment_names
 
 def build_cluster_profiles(clustered_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Compute cluster profiles:
-    - profile_table: formatted for display (Features as rows, Clusters as columns)
+    - profile_table: formatted for display (Features as rows, Segments as columns)
     - numeric_profiles: raw aggregated statistics for programmatic interpretation
     """
     roles = detect_column_roles(clustered_df)
+    seg_names = generate_dynamic_segment_names(clustered_df)
     
     # Priority ordered attributes to summarize
     candidate_features = [
@@ -40,7 +42,7 @@ def build_cluster_profiles(clustered_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd
 
     # Dictionary to build transposed display table
     table_dict = {}
-    table_dict["Houses"] = {f"Cluster {c}": f"{counts[c]:,} ({counts[c] / total_houses * 100:.1f}%)" for c in cluster_ids}
+    table_dict["Properties"] = {f"Segment {c}: {seg_names[c]}": f"{counts[c]:,} ({counts[c] / total_houses * 100:.1f}%)" for c in cluster_ids}
 
     # Store raw means for interpretation
     numeric_means = {}
@@ -53,14 +55,15 @@ def build_cluster_profiles(clustered_df: pd.DataFrame) -> Tuple[pd.DataFrame, pd
         row_formatted = {}
         for c in cluster_ids:
             val = means[c]
+            header = f"Segment {c}: {seg_names[c]}"
             if "price" in col.lower():
-                row_formatted[f"Cluster {c}"] = f"${val:,.0f}"
+                row_formatted[header] = f"${val:,.0f}"
             elif "area" in col.lower() or "lot" in col.lower():
-                row_formatted[f"Cluster {c}"] = f"{val:,.0f} sqft"
+                row_formatted[header] = f"{val:,.0f} sqft"
             elif "year" in col.lower():
-                row_formatted[f"Cluster {c}"] = f"{int(round(val))}"
+                row_formatted[header] = f"{int(round(val))}"
             else:
-                row_formatted[f"Cluster {c}"] = f"{val:.2f}"
+                row_formatted[header] = f"{val:.2f}"
         table_dict[f"Avg {label}"] = row_formatted
 
     profile_display_df = pd.DataFrame(table_dict).T
@@ -97,13 +100,15 @@ def generate_cluster_interpretations(
     cluster_counts = clustered_df["Cluster"].value_counts()
     total_houses = len(clustered_df)
 
+    seg_names = generate_dynamic_segment_names(clustered_df)
+
     for cluster_id in sorted(clustered_df["Cluster"].unique()):
         lines = []
         count = cluster_counts[cluster_id]
         pct = (count / total_houses) * 100
         
         # 1. Size & Share
-        lines.append(f"Cluster {cluster_id} encompasses {count:,} properties ({pct:.1f}% of analyzed dataset).")
+        lines.append(f"Segment {cluster_id} ({seg_names[cluster_id]}) encompasses {count:,} properties ({pct:.1f}% of analyzed dataset).")
 
         # 2. Price Characterization
         if price_col and price_col in numeric_profiles.columns:

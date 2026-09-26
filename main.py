@@ -21,6 +21,7 @@ from src.optimal_k import run_optimal_k_selection
 from src.clustering import train_kmeans
 from src.visualization import generate_cluster_visualizations
 from src.cluster_analysis import run_cluster_analysis
+from src.segment_naming import attach_segment_names, generate_dynamic_segment_names
 
 def run_pipeline(csv_path: Path = config.RAW_DATA_PATH):
     """Run all 8 modules sequentially with rich logging."""
@@ -82,11 +83,15 @@ def run_pipeline(csv_path: Path = config.RAW_DATA_PATH):
     profile_table, interpretations = run_cluster_analysis(clustered_orig)
     log_substep("Cluster profiles generated")
 
+    # Attach dynamic segment names
+    clustered_orig = attach_segment_names(clustered_orig)
+    seg_names = generate_dynamic_segment_names(clustered_orig)
+
     # MODULE 8 — FINAL OUTPUT
     log_step(8, 8, "Saving results")
     output_csv = config.CLUSTERED_DATA_PATH
     clustered_orig.to_csv(output_csv, index=False)
-    log_substep(f"Results saved to '{output_csv.name}' ({len(clustered_orig):,} rows)")
+    log_substep(f"Results saved to '{output_csv.name}' ({len(clustered_orig):,} rows with 'Segment Name')")
 
     # Display Final Project Summary
     print("\n" + "-" * 60)
@@ -97,10 +102,10 @@ def run_pipeline(csv_path: Path = config.RAW_DATA_PATH):
     print(f"Clustering Inertia:    {cluster_metrics['inertia']:,.1f}")
     print(f"Silhouette Score:      {cluster_metrics['silhouette_score']:.4f}")
     print(f"Exported CSV:          {output_csv}")
-    print("\nCluster Size Breakdown:")
+    print("\nProperty Segment Breakdown:")
     for c_id, count in cluster_metrics["cluster_counts"].items():
         pct = (count / len(clustered_orig)) * 100
-        print(f"  Cluster {c_id}: {count:,} houses ({pct:.1f}%)")
+        print(f"  Segment {c_id} ({seg_names.get(c_id, 'N/A')}): {count:,} houses ({pct:.1f}%)")
 
     log_footer("PIPELINE COMPLETED SUCCESSFULLY")
     return clustered_orig, profile_table, interpretations
