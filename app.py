@@ -1,1006 +1,1330 @@
 """
-PROPERTY SEGMENTATION ANALYTICS
-A Modern Real-Estate Market Analytics and Property Segmentation Platform
-Powered by K-Means Unsupervised Learning.
+PROPERTY INTELLIGENCE & SEGMENT DISCOVERY SYSTEM
+Streamlit Analytics Dashboard
+
+Discover natural property communities, explore multidimensional similarity spaces,
+profile segment DNA, map geographic concentrations, and match properties using K-Means clustering.
 """
 
-import io
+import sys
 from pathlib import Path
-import matplotlib.pyplot as plt
-import numpy as np
+from typing import Dict, Any, List, Optional
 import pandas as pd
-import seaborn as sns
+import numpy as np
 import streamlit as st
 
-# Safe optional Plotly import
+# Setup Path
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
+import config
+from src.property_data import PropertyDataLoader
+from src.property_intelligence import PropertyIntelligence
+from src.property_signature import PropertySignatureEngine
+from src.similarity_engine import SimilarityEngine
+from src.k_discovery import KDiscoveryLab
+from src.segment_engine import SegmentEngine
+from src.segment_dna import SegmentDNAProfiler
+from src.spatial_intelligence import SpatialIntelligence
+from src.property_matcher import PropertyMatcher
+from src.insight_engine import InsightEngine
+
+# Check Plotly Availability
 try:
     import plotly.express as px
     import plotly.graph_objects as go
     HAS_PLOTLY = True
 except ImportError:
     HAS_PLOTLY = False
-    px = None
-    go = None
+    import matplotlib.pyplot as plt
+    import seaborn as sns
 
-import config
-from src.cluster_analysis import build_cluster_profiles, generate_cluster_interpretations
-from src.clustering import HouseClusteringModel
-from src.data_loader import DataLoader
-from src.eda import (
-    compute_descriptive_statistics, 
-    plot_bivariate_scatter, 
-    plot_correlation_heatmap, 
-    plot_feature_distribution
-)
-from src.optimal_k import (
-    determine_optimal_k, 
-    evaluate_k_range, 
-    plot_elbow_curve, 
-    plot_silhouette_curve
-)
-from src.preprocessing import DataPreprocessor
-from src.segment_naming import (
-    attach_segment_names, 
-    generate_dynamic_segment_names, 
-    get_segment_summary_cards
-)
-from src.utils import detect_column_roles, ensure_directories, format_number
-from src.visualization import (
-    plot_cluster_distribution, 
-    plot_cluster_feature_comparisons, 
-    plot_pca_clusters
-)
-from sklearn.decomposition import PCA
-
-# ---------------------------------------------------------
-# STREAMLIT PAGE CONFIGURATION
-# ---------------------------------------------------------
+# ==========================================
+# PAGE CONFIGURATION & THEME STYLING
+# ==========================================
 st.set_page_config(
-    page_title="Property Segmentation Analytics | Real-Estate ML",
-    page_icon="🏘️",
+    page_title="Property Intelligence & Segment Discovery",
+    page_icon="🏙️",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Custom Real-Estate Analytics Styling
-st.markdown("""
+CUSTOM_CSS = """
 <style>
-    /* Global Container Adjustments */
-    .block-container {
-        padding-top: 1.8rem;
-        padding-bottom: 2.5rem;
-    }
-    
-    /* Real Estate Analytics Branding */
-    .app-title {
-        font-size: 2.3rem;
-        font-weight: 800;
-        color: #0F172A;
-        letter-spacing: -0.5px;
-        margin-bottom: 0.1rem;
-    }
-    .app-subtitle {
-        font-size: 1.05rem;
-        color: #475569;
-        font-weight: 400;
-        margin-bottom: 1.8rem;
-    }
-    
-    /* Metric Card Styling */
-    .re-metric-card {
-        background: #F8FAFC;
-        border: 1px solid #E2E8F0;
-        border-radius: 10px;
-        padding: 1.2rem;
-        border-top: 4px solid #2563EB;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
-    }
-    .re-metric-label {
-        font-size: 0.82rem;
-        text-transform: uppercase;
-        letter-spacing: 0.6px;
-        color: #64748B;
-        font-weight: 600;
-        margin-bottom: 0.3rem;
-    }
-    .re-metric-value {
-        font-size: 1.7rem;
-        font-weight: 700;
-        color: #0F172A;
-    }
-    .re-metric-subtext {
-        font-size: 0.8rem;
-        color: #10B981;
-        margin-top: 0.2rem;
+    @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
-    /* Segment Profile Card */
-    .segment-card {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        border-radius: 10px;
-        padding: 1.4rem;
-        margin-bottom: 1.2rem;
-        box-shadow: 0 2px 5px rgba(0, 0, 0, 0.03);
+    /* Primary Background & Containers */
+    .stApp {
+        background-color: #0B0F19;
+        color: #F1F5F9;
     }
-    .segment-badge {
-        display: inline-block;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.8rem;
+
+    /* Metric Cards */
+    .metric-card {
+        background: linear-gradient(135deg, #131C31 0%, #0F172A 100%);
+        border: 1px solid #1E293B;
+        border-radius: 12px;
+        padding: 18px 22px;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+        margin-bottom: 12px;
+    }
+    .metric-label {
+        color: #94A3B8;
+        font-size: 0.82rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        margin-bottom: 6px;
+    }
+    .metric-value {
+        color: #38BDF8;
+        font-size: 1.75rem;
+        font-weight: 800;
+        line-height: 1.2;
+    }
+    .metric-sub {
+        color: #64748B;
+        font-size: 0.78rem;
+        margin-top: 4px;
+    }
+
+    /* Segment DNA Card */
+    .dna-card {
+        background: #111B2E;
+        border: 1px solid #233554;
+        border-radius: 12px;
+        padding: 22px;
+        margin-bottom: 18px;
+    }
+    .dna-title {
+        font-size: 1.25rem;
         font-weight: 700;
-        margin-bottom: 0.8rem;
+        color: #F8FAFC;
+        margin-bottom: 4px;
+    }
+    .dna-badge {
+        display: inline-block;
+        background: #1E3A8A;
+        color: #93C5FD;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-bottom: 12px;
+    }
+
+    /* Bar indicator monospace */
+    .code-bar {
+        font-family: 'JetBrains Mono', monospace;
+        color: #38BDF8;
+        font-weight: 600;
+    }
+
+    /* Highlight badge */
+    .tag-badge {
+        background: #1E293B;
+        border: 1px solid #334155;
+        color: #CBD5E1;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 0.75rem;
+        margin-right: 6px;
+    }
+
+    /* Sidebar Navigation Header */
+    .nav-section-title {
+        color: #64748B;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        margin-top: 14px;
+        margin-bottom: 6px;
     }
 </style>
-""", unsafe_allow_html=True)
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-# ---------------------------------------------------------
-# CACHED DATA PIPELINE FUNCTIONS
-# ---------------------------------------------------------
-@st.cache_data
-def load_raw_data(csv_path_str: str):
-    loader = DataLoader(Path(csv_path_str))
-    df = loader.load_data()
-    summary = loader.get_summary_dict()
-    return df, summary
 
-@st.cache_data
-def run_preprocessing(raw_df: pd.DataFrame):
-    preprocessor = DataPreprocessor(raw_df)
-    cleaned_df, scaled_df, meta = preprocessor.preprocess()
-    return cleaned_df, scaled_df, meta
+# ==========================================
+# DATA & PIPELINE CACHING
+# ==========================================
+@st.cache_data(show_spinner="Loading Property Universe...")
+def load_universe_data():
+    """Loads raw dataset and computes universe inventory metrics."""
+    loader = PropertyDataLoader(config.RAW_DATA_PATH)
+    raw_df = loader.load_data()
+    universe_metrics = loader.get_universe_metrics()
+    return raw_df, universe_metrics
 
-@st.cache_data
-def compute_k_evaluation(scaled_df: pd.DataFrame):
-    results_df = evaluate_k_range(scaled_df)
-    recommended_k, decision_info = determine_optimal_k(results_df)
-    return results_df, recommended_k, decision_info
+@st.cache_resource(show_spinner="Auditing Property Intelligence & Scaling...")
+def prepare_intelligence(raw_df: pd.DataFrame):
+    """Executes data trust audit, classifies feature roles, and fits StandardScaler."""
+    intelligence = PropertyIntelligence(raw_df)
+    usable_df, scaled_df, scaler, trust_meta = intelligence.audit_and_prepare()
+    return usable_df, scaled_df, scaler, trust_meta
 
-@st.cache_data
-def run_clustering_cached(scaled_df: pd.DataFrame, cleaned_df: pd.DataFrame, k: int):
-    model = HouseClusteringModel(k=k)
-    clustered_orig, clustered_scaled, metrics = model.fit_predict(scaled_df, cleaned_df)
-    # Attach dynamic segment names
-    clustered_orig = attach_segment_names(clustered_orig)
-    profile_table, numeric_profiles = build_cluster_profiles(clustered_orig)
-    interpretations = generate_cluster_interpretations(clustered_orig, numeric_profiles)
-    return clustered_orig, clustered_scaled, model, metrics, profile_table, interpretations
+@st.cache_data(show_spinner="Evaluating K Discovery Lab...")
+def run_k_discovery(scaled_df: pd.DataFrame):
+    """Evaluates K=2..10 with WCSS and Silhouette Scores."""
+    k_lab = KDiscoveryLab(scaled_df)
+    recommended_k, results_df, meta = k_lab.run_discovery()
+    return recommended_k, results_df, meta
 
-# ---------------------------------------------------------
-# MAIN APP ENTRYPOINT
-# ---------------------------------------------------------
-def main():
-    ensure_directories()
+@st.cache_resource(show_spinner="Discovering Property Communities...")
+def fit_community_model(scaled_df: pd.DataFrame, usable_df: pd.DataFrame, k: int):
+    """Fits K-Means and generates 2D PCA landscape projection."""
+    engine = SegmentEngine(k=k)
+    clustered_df, kmeans_model, pca_model, pca_df, pca_centroids, conv_info = engine.fit_communities(
+        scaled_df=scaled_df,
+        usable_df=usable_df
+    )
+    # Generate dynamic segment names & DNA
+    dna_profiler = SegmentDNAProfiler(clustered_df)
+    segment_names = dna_profiler.generate_segment_names()
+    clustered_df["Segment Name"] = clustered_df["Cluster"].map(segment_names)
+    pca_df["Segment Name"] = pca_df["Cluster"].map(segment_names)
+    dna_profiles = dna_profiler.extract_segment_dna(segment_names)
+    comp_table = dna_profiler.get_comparison_table(segment_names)
 
-    # Load and Preprocess Dataset
-    csv_path = config.RAW_DATA_PATH
-    if not csv_path.exists():
-        st.error(f"⚠️ Dataset file not found at '{csv_path}'. Please ensure 'data/{config.DEFAULT_DATASET_NAME}' is present.")
-        return
-
-    try:
-        raw_df, raw_summary = load_raw_data(str(csv_path))
-    except Exception as e:
-        st.error(f"Error loading dataset: {e}")
-        return
-
-    cleaned_df, scaled_df, prep_meta = run_preprocessing(raw_df)
-    k_results_df, recommended_k, k_decision = compute_k_evaluation(scaled_df)
-
-    # Sidebar Navigation - Real-Estate Analytics Layout
-    with st.sidebar:
-        st.markdown("## 🏘️ **Property Analytics**")
-        st.caption("Property Segmentation & Market Intelligence")
-        st.divider()
-
-        # Dedicated Navigation Menu
-        nav_choice = st.radio(
-            "Select Section",
-            options=[
-                "🏠 Market Overview",
-                "🏘 Property Explorer",
-                "📊 Market Patterns",
-                "🧩 Property Segments",
-                "⚖ Segment Comparison",
-                "📍 Segment Map / Spatial View",
-                "⚙ Clustering Analysis",
-                "📁 Dataset & Quality",
-                "📑 Property Segmentation Summary"
-            ],
-            index=0
-        )
-
-        st.divider()
-        # Clear distinction between Official Recommended K and Model K
-        st.markdown("### 🎯 **Segmentation Control**")
-        st.markdown(f"**Official Optimal K:** `{recommended_k}`")
-        
-        # Experimental K slider (clearly labeled as exploration)
-        exp_k = st.slider(
-            "Explore Alternative K:",
-            min_value=config.K_MIN,
-            max_value=config.K_MAX,
-            value=int(recommended_k),
-            help="Defaults to the official mathematically selected K. You can adjust this to test other segment granularities."
-        )
-        if exp_k != recommended_k:
-            st.warning(f"Exploring Experimental K = {exp_k} (Official Recommended K is {recommended_k}).")
-
-        st.divider()
-        st.caption(f"Dataset: Kaggle House Price India ({len(cleaned_df):,} records)")
-
-    # Run clustering with active K (defaults to official recommended_k)
-    active_k = exp_k
-    clustered_orig, clustered_scaled, model, cluster_metrics, profile_table, interpretations = run_clustering_cached(
-        scaled_df, cleaned_df, active_k
+    return (
+        clustered_df,
+        kmeans_model,
+        pca_model,
+        pca_df,
+        pca_centroids,
+        conv_info,
+        segment_names,
+        dna_profiles,
+        comp_table,
     )
 
-    # Dynamic Column Role Detection
-    roles = detect_column_roles(cleaned_df)
-    price_col = roles.get("price", "Price")
-    area_col = roles.get("living_area", "living area")
-    bed_col = roles.get("bedrooms", "number of bedrooms")
-    bath_col = roles.get("bathrooms", "number of bathrooms")
-    floor_col = roles.get("floors", "number of floors")
-    grade_col = roles.get("grade", "grade of the house")
-    cond_col = roles.get("condition", "condition of the house")
-    built_col = roles.get("built_year", "Built Year")
 
-    # Header Banner
-    st.markdown('<div class="app-title">PROPERTY SEGMENTATION ANALYTICS</div>', unsafe_allow_html=True)
-    st.markdown('<div class="app-subtitle">Explore hidden patterns and property segments using K-Means clustering</div>', unsafe_allow_html=True)
+# ==========================================
+# MAIN APPLICATION CONTROLLER
+# ==========================================
+def main():
+    # 1. Load Data & Pipeline
+    raw_df, universe_metrics = load_universe_data()
+    usable_df, scaled_df, scaler, trust_meta = prepare_intelligence(raw_df)
+    recommended_k, k_results_df, k_meta = run_k_discovery(scaled_df)
 
-    # ---------------------------------------------------------
-    # PAGE 1: 🏠 MARKET OVERVIEW
-    # ---------------------------------------------------------
-    if nav_choice == "🏠 Market Overview":
-        st.markdown("### 🏠 Property Market Overview")
-        st.markdown("Macro-level portfolio snapshot and foundational property metrics derived dynamically from the dataset.")
-
-        # Large KPI Cards (ALL dynamically computed, NEVER hard-coded!)
-        kpi_col1, kpi_col2, kpi_col3, kpi_col4, kpi_col5, kpi_col6 = st.columns(6)
-        with kpi_col1:
-            st.markdown(f"""
-            <div class="re-metric-card">
-                <div class="re-metric-label">Total Properties</div>
-                <div class="re-metric-value">{len(cleaned_df):,}</div>
-                <div class="re-metric-subtext">Verified Records</div>
+    # 2. Sidebar Navigation (Custom Selectbox without radio circles)
+    st.sidebar.markdown(
+        """
+        <div style="padding: 10px 0 16px 0;">
+            <div style="font-size: 1.2rem; font-weight: 800; color: #38BDF8; letter-spacing: -0.02em;">
+                🏙️ PROPERTY INTELLIGENCE
             </div>
-            """, unsafe_allow_html=True)
-        with kpi_col2:
-            st.markdown(f"""
-            <div class="re-metric-card">
-                <div class="re-metric-label">Average Price</div>
-                <div class="re-metric-value">${cleaned_df[price_col].mean():,.0f}</div>
-                <div class="re-metric-subtext">Portfolio Mean</div>
+            <div style="font-size: 0.78rem; color: #94A3B8; font-weight: 500;">
+                Segment Discovery & Similarity System
             </div>
-            """, unsafe_allow_html=True)
-        with kpi_col3:
-            st.markdown(f"""
-            <div class="re-metric-card">
-                <div class="re-metric-label">Median Price</div>
-                <div class="re-metric-value">${cleaned_df[price_col].median():,.0f}</div>
-                <div class="re-metric-subtext">50th Percentile</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    nav_options = [
+        "01 — Property Universe",
+        "02 — Property Landscape",
+        "03 — Segment Discovery",
+        "04 — Segment DNA",
+        "05 — Spatial Intelligence",
+        "06 — Property Match",
+        "07 — Similar Property Finder",
+        "08 — Method & Data Trust",
+        "09 — Insights & Export"
+    ]
+
+    selected_page = st.sidebar.selectbox(
+        "Select Analytical Module:",
+        options=nav_options,
+        index=0
+    )
+
+    # Sidebar Pipeline Status
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(
+        f"""
+        <div style="background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 12px;">
+            <div style="font-size: 0.75rem; color: #64748B; font-weight: 700; text-transform: uppercase;">
+                Pipeline Architecture
             </div>
-            """, unsafe_allow_html=True)
-        with kpi_col4:
-            st.markdown(f"""
-            <div class="re-metric-card">
-                <div class="re-metric-label">Avg Living Area</div>
-                <div class="re-metric-value">{cleaned_df[area_col].mean():,.0f} <span style="font-size:1rem;">sqft</span></div>
-                <div class="re-metric-subtext">Median: {cleaned_df[area_col].median():,.0f} sqft</div>
+            <div style="font-size: 0.85rem; color: #F1F5F9; font-weight: 600; margin-top: 4px;">
+                Standardized {trust_meta['dimensionality']}D Similarity Space
             </div>
-            """, unsafe_allow_html=True)
-        with kpi_col5:
-            st.markdown(f"""
-            <div class="re-metric-card">
-                <div class="re-metric-label">Avg Bedrooms</div>
-                <div class="re-metric-value">{cleaned_df[bed_col].mean():.1f}</div>
-                <div class="re-metric-subtext">Typical: {int(cleaned_df[bed_col].median())} Beds</div>
+            <div style="font-size: 0.78rem; color: #38BDF8; margin-top: 2px;">
+                Official Recommended K: {recommended_k}
             </div>
-            """, unsafe_allow_html=True)
-        with kpi_col6:
-            st.markdown(f"""
-            <div class="re-metric-card">
-                <div class="re-metric-label">Property Segments</div>
-                <div class="re-metric-value">{active_k}</div>
-                <div class="re-metric-subtext">Discovered Groups</div>
+            <div style="font-size: 0.75rem; color: #94A3B8; margin-top: 2px;">
+                Inventory: {trust_meta['usable_properties']:,} Homes
             </div>
-            """, unsafe_allow_html=True)
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-        st.markdown("<br>", unsafe_allow_html=True)
+    # Sidebar Experimental Exploration K control
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(
+        "<div style='font-size: 0.78rem; font-weight: 600; color: #CBD5E1;'>Community Exploration (K)</div>",
+        unsafe_allow_html=True
+    )
+    active_k = st.sidebar.slider(
+        "Clustering K",
+        min_value=2,
+        max_value=8,
+        value=recommended_k,
+        help="Explore property community structures. Default matches Official Recommended K."
+    )
+    if active_k != recommended_k:
+        st.sidebar.caption(f"⚡ Exploring experimental K={active_k} (Recommended: K={recommended_k})")
 
-        # Dual Distributions
-        col_dist1, col_dist2 = st.columns(2)
-        with col_dist1:
-            st.markdown("#### Property Price Distribution")
-            if HAS_PLOTLY:
-                fig_price = px.histogram(
-                    cleaned_df,
-                    x=price_col,
-                    nbins=45,
-                    marginal="box",
-                    title="Property Price Distribution ($ USD)",
-                    color_discrete_sequence=["#1E3A8A"]
-                )
-                fig_price.update_layout(xaxis_title="Property Price ($)", yaxis_title="Number of Properties", height=380)
-                st.plotly_chart(fig_price, use_container_width=True)
-            else:
-                fig_p = plot_feature_distribution(cleaned_df, price_col)
-                st.pyplot(fig_p)
+    # Fit / retrieve community model for active_k
+    (
+        clustered_df,
+        kmeans_model,
+        pca_model,
+        pca_df,
+        pca_centroids,
+        conv_info,
+        segment_names,
+        dna_profiles,
+        comp_table,
+    ) = fit_community_model(scaled_df, usable_df, active_k)
 
-        with col_dist2:
-            st.markdown("#### Living Area Distribution")
-            if HAS_PLOTLY:
-                fig_area = px.histogram(
-                    cleaned_df,
-                    x=area_col,
-                    nbins=45,
-                    marginal="box",
-                    title="Living Area Distribution (Square Feet)",
-                    color_discrete_sequence=["#059669"]
-                )
-                fig_area.update_layout(xaxis_title="Living Area (sqft)", yaxis_title="Number of Properties", height=380)
-                st.plotly_chart(fig_area, use_container_width=True)
-            else:
-                fig_a = plot_feature_distribution(cleaned_df, area_col)
-                st.pyplot(fig_a)
+    # Instantiate Engines
+    sig_engine = PropertySignatureEngine(usable_df)
+    sim_engine = SimilarityEngine(
+        scaled_df=scaled_df,
+        original_df=clustered_df,
+        scaler=scaler,
+        feature_names=trust_meta["segmentation_feature_names"]
+    )
+    spatial_engine = SpatialIntelligence(clustered_df)
+    matcher = PropertyMatcher(
+        scaler=scaler,
+        kmeans_model=kmeans_model,
+        segment_names=segment_names,
+        reference_df=usable_df,
+        feature_names=trust_meta["segmentation_feature_names"]
+    )
 
-        # Market Snapshot (Purely Data-Driven, Dynamic)
-        st.markdown("### 📌 Market Snapshot & Characteristics")
-        snap_col1, snap_col2 = st.columns(2)
-        
-        mode_bed = cleaned_df[bed_col].mode()[0]
-        mode_bath = cleaned_df[bath_col].mode()[0]
-        min_p = cleaned_df[price_col].min()
-        max_p = cleaned_df[price_col].max()
-        largest_row = cleaned_df.loc[cleaned_df[area_col].idxmax()]
-        smallest_row = cleaned_df.loc[cleaned_df[area_col].idxmin()]
+    # 3. Route to Selected Page
+    if selected_page == "01 — Property Universe":
+        render_page_universe(universe_metrics, usable_df)
+    elif selected_page == "02 — Property Landscape":
+        render_page_landscape(pca_df, pca_centroids, usable_df, trust_meta)
+    elif selected_page == "03 — Segment Discovery":
+        render_page_discovery(k_results_df, k_meta, conv_info, active_k, recommended_k)
+    elif selected_page == "04 — Segment DNA":
+        render_page_segment_dna(dna_profiles, comp_table, clustered_df)
+    elif selected_page == "05 — Spatial Intelligence":
+        render_page_spatial(spatial_engine, segment_names)
+    elif selected_page == "06 — Property Match":
+        render_page_property_match(matcher, universe_metrics, usable_df)
+    elif selected_page == "07 — Similar Property Finder":
+        render_page_similar_finder(sim_engine, sig_engine, clustered_df)
+    elif selected_page == "08 — Method & Data Trust":
+        render_page_method_trust(trust_meta, k_meta, conv_info)
+    elif selected_page == "09 — Insights & Export":
+        render_page_insights_export(clustered_df, comp_table, dna_profiles, trust_meta)
 
-        with snap_col1:
-            st.markdown(f"""
-            - **Dominant Layout:** Most frequent configuration is **{mode_bed:.0f} bedrooms** and **{mode_bath:.1f} bathrooms**.
-            - **Valuation Spread:** Market prices span from **${min_p:,.0f}** to **${max_p:,.0f}**.
-            - **Interquartile Price Range:** Middle 50% of homes trade between **${cleaned_df[price_col].quantile(0.25):,.0f}** and **${cleaned_df[price_col].quantile(0.75):,.0f}**.
-            """)
-        with snap_col2:
-            st.markdown(f"""
-            - **Largest Property:** **{largest_row[area_col]:,.0f} sqft** with {largest_row[bed_col]} bedrooms (priced at ${largest_row[price_col]:,.0f}).
-            - **Smallest Property:** **{smallest_row[area_col]:,.0f} sqft** with {smallest_row[bed_col]} bedrooms (priced at ${smallest_row[price_col]:,.0f}).
-            - **Construction Era:** Built years range from **{int(cleaned_df[built_col].min())}** to **{int(cleaned_df[built_col].max())}** (median build year: {int(cleaned_df[built_col].median())}).
-            """)
 
-    # ---------------------------------------------------------
-    # PAGE 2: 🏘 PROPERTY EXPLORER
-    # ---------------------------------------------------------
-    elif nav_choice == "🏘 Property Explorer":
-        st.markdown("### 🏘 Property Explorer")
-        st.markdown("Interactive multi-criteria search to explore individual properties and inspect their assigned market segments.")
+# ==========================================
+# PAGE 1: 01 — PROPERTY UNIVERSE
+# ==========================================
+def render_page_universe(universe_metrics: Dict[str, Any], usable_df: pd.DataFrame):
+    st.markdown(
+        """
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 1 — PROPERTY UNIVERSE
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                Understanding the Property Inventory
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Before clustering, we examine the raw multi-attribute housing universe.
+                Explore the empirical price, architectural scale, and spatial distribution across the inventory.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-        # Interactive Filtering Controls
-        with st.expander("🔍 Filter Controls", expanded=True):
-            f_col1, f_col2, f_col3 = st.columns(3)
-            with f_col1:
-                price_min_val = int(cleaned_df[price_col].min())
-                price_max_val = int(cleaned_df[price_col].max())
-                price_range = st.slider(
-                    "Price Range ($)",
-                    min_value=price_min_val,
-                    max_value=price_max_val,
-                    value=(price_min_val, price_max_val),
-                    step=10000
-                )
-            with f_col2:
-                area_min_val = int(cleaned_df[area_col].min())
-                area_max_val = int(cleaned_df[area_col].max())
-                area_range = st.slider(
-                    "Living Area Range (sqft)",
-                    min_value=area_min_val,
-                    max_value=area_max_val,
-                    value=(area_min_val, area_max_val),
-                    step=100
-                )
-            with f_col3:
-                all_segments = ["All Segments"] + sorted(clustered_orig["Segment Label"].unique().tolist())
-                selected_seg = st.selectbox("Market Segment", options=all_segments, index=0)
+    # Dynamic Hero Stat Row
+    p = universe_metrics["price_metrics"]
+    a = universe_metrics["area_metrics"]
+    y = universe_metrics["year_metrics"]
+    c = universe_metrics["coordinate_bounds"]
 
-            f_col4, f_col5, f_col6 = st.columns(3)
-            with f_col4:
-                bed_options = sorted([int(b) for b in cleaned_df[bed_col].unique()])
-                sel_beds = st.multiselect("Bedrooms", options=bed_options, default=bed_options)
-            with f_col5:
-                cond_options = sorted([int(c) for c in cleaned_df[cond_col].unique()]) if cond_col in cleaned_df else []
-                sel_cond = st.multiselect("Condition (1 to 5)", options=cond_options, default=cond_options)
-            with f_col6:
-                baths_min = float(cleaned_df[bath_col].min())
-                baths_max = float(cleaned_df[bath_col].max())
-                baths_range = st.slider("Bathrooms", min_value=baths_min, max_value=baths_max, value=(baths_min, baths_max), step=0.25)
-
-        # Apply Filters Dynamically
-        filtered_df = clustered_orig[
-            (clustered_orig[price_col] >= price_range[0]) & 
-            (clustered_orig[price_col] <= price_range[1]) &
-            (clustered_orig[area_col] >= area_range[0]) & 
-            (clustered_orig[area_col] <= area_range[1]) &
-            (clustered_orig[bath_col] >= baths_range[0]) & 
-            (clustered_orig[bath_col] <= baths_range[1])
-        ]
-        if sel_beds:
-            filtered_df = filtered_df[filtered_df[bed_col].isin(sel_beds)]
-        if cond_col in filtered_df and sel_cond:
-            filtered_df = filtered_df[filtered_df[cond_col].isin(sel_cond)]
-        if selected_seg != "All Segments":
-            filtered_df = filtered_df[filtered_df["Segment Label"] == selected_seg]
-
-        st.markdown(f"**Displaying {len(filtered_df):,} of {len(cleaned_df):,} properties** ({(len(filtered_df)/len(cleaned_df))*100:.1f}% of market portfolio)")
-
-        # Display Clean Table with Key Attributes
-        display_cols = [
-            col for col in [
-                "id", price_col, area_col, bed_col, bath_col, floor_col, grade_col, cond_col, built_col, "Segment Label"
-            ] if col in filtered_df.columns
-        ]
-        st.dataframe(filtered_df[display_cols].head(100), use_container_width=True, height=350)
-
-        # Individual Property Inspector
-        st.markdown("---")
-        st.markdown("#### 🔎 Individual Property Profile Inspector")
-        if not filtered_df.empty:
-            sel_idx = st.selectbox(
-                "Select a property record to inspect detailed specifications:",
-                options=filtered_df.index[:200].tolist(),
-                format_func=lambda idx: f"Property Index {idx} — ${filtered_df.loc[idx, price_col]:,.0f} | {filtered_df.loc[idx, area_col]:,.0f} sqft | {filtered_df.loc[idx, bed_col]} Beds | {filtered_df.loc[idx, 'Segment Label']}"
-            )
-            prop = filtered_df.loc[sel_idx]
-
-            p_col1, p_col2 = st.columns([1, 2])
-            with p_col1:
-                st.markdown(f"""
-                <div class="segment-card" style="border-left: 5px solid #2563EB;">
-                    <div style="font-size:0.85rem; font-weight:700; color:#64748B;">ASSIGNED PROPERTY SEGMENT</div>
-                    <div style="font-size:1.35rem; font-weight:800; color:#1E3A8A; margin: 0.4rem 0;">{prop['Segment Label']}</div>
-                    <hr style="margin: 0.5rem 0;">
-                    <div style="font-size:0.9rem; color:#334155;"><b>Property ID:</b> {prop.get('id', sel_idx)}</div>
-                    <div style="font-size:0.9rem; color:#334155;"><b>Valuation:</b> ${prop[price_col]:,.0f}</div>
-                    <div style="font-size:0.9rem; color:#334155;"><b>Living Area:</b> {prop[area_col]:,.0f} sqft</div>
-                    <div style="font-size:0.9rem; color:#334155;"><b>Bedrooms / Baths:</b> {prop[bed_col]} beds / {prop[bath_col]} baths</div>
-                </div>
-                """, unsafe_allow_html=True)
-            with p_col2:
-                # Comparison against assigned segment averages
-                seg_sub = clustered_orig[clustered_orig["Cluster"] == prop["Cluster"]]
-                avg_seg_p = seg_sub[price_col].mean()
-                avg_seg_a = seg_sub[area_col].mean()
-
-                p_diff = ((prop[price_col] - avg_seg_p) / avg_seg_p) * 100
-                a_diff = ((prop[area_col] - avg_seg_a) / avg_seg_a) * 100
-
-                st.markdown(f"""
-                ##### Segment Context Analysis:
-                - **Price vs Segment Average:** ${prop[price_col]:,.0f} ({p_diff:+.1f}% relative to segment average ${avg_seg_p:,.0f}).
-                - **Area vs Segment Average:** {prop[area_col]:,.0f} sqft ({a_diff:+.1f}% relative to segment average {avg_seg_a:,.0f} sqft).
-                - **Structural Build:** Condition rating **{prop.get(cond_col, 'N/A')}/5**, Construction Grade **{prop.get(grade_col, 'N/A')}/13**.
-                - **Construction Year:** Built in **{int(prop.get(built_col, 0))}**.
-                """)
-        else:
-            st.warning("No properties match the chosen filter criteria. Please broaden your search ranges.")
-
-    # ---------------------------------------------------------
-    # PAGE 3: 📊 MARKET PATTERNS
-    # ---------------------------------------------------------
-    elif nav_choice == "📊 Market Patterns":
-        st.markdown("### 📊 Market Patterns & Correlations")
-        st.markdown("Exploratory visual analytics examining structural and economic relationships across the property market before clustering.")
-
-        mp_tab1, mp_tab2, mp_tab3 = st.tabs(["📈 Bivariate Relationships", "📦 Price by Layout", "🔥 Correlation Heatmap"])
-
-        with mp_tab1:
-            col_b1, col_b2 = st.columns(2)
-            with col_b1:
-                st.markdown("#### Price vs Living Area")
-                if HAS_PLOTLY:
-                    sample_eda = cleaned_df.sample(n=min(3500, len(cleaned_df)), random_state=config.RANDOM_STATE)
-                    fig_pa = px.scatter(
-                        sample_eda,
-                        x=area_col,
-                        y=price_col,
-                        opacity=0.45,
-                        title=f"Price vs Living Area ({len(sample_eda):,} Sampled Homes)",
-                        color_discrete_sequence=["#1D4ED8"]
-                    )
-                    # Add pure numpy trendline without statsmodels
-                    x_v = sample_eda[area_col].values.astype(float)
-                    y_v = sample_eda[price_col].values.astype(float)
-                    sl, inc = np.polyfit(x_v, y_v, 1)
-                    x_line = np.linspace(x_v.min(), x_v.max(), 50)
-                    fig_pa.add_trace(go.Scatter(x=x_line, y=sl*x_line+inc, mode="lines", line=dict(color="red", width=2.5), name="Trendline"))
-                    fig_pa.update_layout(xaxis_title="Living Area (sqft)", yaxis_title="Price ($)", height=450)
-                    st.plotly_chart(fig_pa, use_container_width=True)
-                else:
-                    st.pyplot(plot_bivariate_scatter(cleaned_df, area_col, price_col))
-
-            with col_b2:
-                st.markdown("#### Area vs Bedrooms")
-                if HAS_PLOTLY:
-                    fig_ab = px.scatter(
-                        sample_eda,
-                        x=bed_col,
-                        y=area_col,
-                        opacity=0.45,
-                        title="Living Area vs Bedroom Count",
-                        color_discrete_sequence=["#0D9488"]
-                    )
-                    x_b = sample_eda[bed_col].values.astype(float)
-                    y_a = sample_eda[area_col].values.astype(float)
-                    sl2, inc2 = np.polyfit(x_b, y_a, 1)
-                    x_line2 = np.linspace(x_b.min(), x_b.max(), 50)
-                    fig_ab.add_trace(go.Scatter(x=x_line2, y=sl2*x_line2+inc2, mode="lines", line=dict(color="darkorange", width=2.5), name="Trendline"))
-                    fig_ab.update_layout(xaxis_title="Bedrooms", yaxis_title="Living Area (sqft)", height=450)
-                    st.plotly_chart(fig_ab, use_container_width=True)
-                else:
-                    st.pyplot(plot_bivariate_scatter(cleaned_df, bed_col, area_col))
-
-        with mp_tab2:
-            st.markdown("#### Property Price Distribution Grouped by Bedroom Count")
-            if HAS_PLOTLY:
-                fig_bed_box = px.box(
-                    cleaned_df[cleaned_df[bed_col] <= 7],
-                    x=bed_col,
-                    y=price_col,
-                    color=bed_col,
-                    title="Price Distribution Across Bedroom Configurations (Up to 7 Bedrooms)",
-                    color_discrete_sequence=px.colors.qualitative.Prism
-                )
-                fig_bed_box.update_layout(xaxis_title="Number of Bedrooms", yaxis_title="Price ($)", height=480, showlegend=False)
-                st.plotly_chart(fig_bed_box, use_container_width=True)
-            else:
-                fig_box, ax = plt.subplots(figsize=(10, 5))
-                sns.boxplot(data=cleaned_df[cleaned_df[bed_col] <= 7], x=bed_col, y=price_col, ax=ax, palette="viridis")
-                ax.set_title("Price Distribution by Bedroom Count")
-                st.pyplot(fig_box)
-
-        with mp_tab3:
-            st.markdown("#### Feature Correlation Heatmap")
-            st.caption("Pearson correlation between structural dimensions, quality metrics, and market price.")
-            if HAS_PLOTLY:
-                corr_df = cleaned_df[prep_meta["selected_features"]].corr()
-                fig_corr = px.imshow(
-                    corr_df,
-                    text_auto=".2f",
-                    aspect="auto",
-                    color_continuous_scale="RdBu_r",
-                    zmin=-1,
-                    zmax=1,
-                    title="Correlation Matrix of Selected Property Attributes"
-                )
-                fig_corr.update_layout(height=650)
-                st.plotly_chart(fig_corr, use_container_width=True)
-            else:
-                st.pyplot(plot_correlation_heatmap(cleaned_df, prep_meta["selected_features"]))
-
-    # ---------------------------------------------------------
-    # PAGE 4: 🧩 PROPERTY SEGMENTS
-    # ---------------------------------------------------------
-    elif nav_choice == "🧩 Property Segments":
-        st.markdown("### 🧩 Discovered Property Segments")
-        st.markdown(f"Unsupervised clustering grouped **{len(clustered_orig):,} properties** into **{active_k} distinct market segments**.")
-
-        # Segment Profile Cards
-        st.markdown("#### Discovered Segment Profiles")
-        cards = get_segment_summary_cards(clustered_orig)
-        card_cols = st.columns(len(cards))
-        
-        for i, card in enumerate(cards):
-            with card_cols[i]:
-                st.markdown(f"""
-                <div class="segment-card" style="border-top: 4px solid #2563EB;">
-                    <div class="segment-badge" style="background:#DBEAFE; color:#1E40AF;">Segment {card['cluster_id']}</div>
-                    <div style="font-size:1.15rem; font-weight:800; color:#0F172A; min-height: 48px;">{card['segment_name']}</div>
-                    <div style="font-size:0.85rem; color:#64748B; margin-bottom:0.8rem;"><b>{card['count']:,} Properties</b> ({card['percentage']:.1f}% share)</div>
-                    <hr style="margin: 0.5rem 0;">
-                    <div style="font-size:0.88rem; color:#334155; margin-bottom: 0.3rem;"><b>Avg Price:</b> ${card['avg_price']:,.0f}</div>
-                    <div style="font-size:0.88rem; color:#334155; margin-bottom: 0.3rem;"><b>Avg Living Area:</b> {card['avg_area']:,.0f} sqft</div>
-                    <div style="font-size:0.88rem; color:#334155; margin-bottom: 0.3rem;"><b>Avg Layout:</b> {card['avg_beds']:.1f} beds / {card['avg_baths']:.1f} baths</div>
-                    <div style="font-size:0.88rem; color:#334155;"><b>Avg Grade:</b> {card['avg_grade']:.1f} / 13</div>
-                </div>
-                """, unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        # 2D PCA Cluster Scatter Visualization
-        st.markdown("#### High-Dimensional Feature Space Visualization (2D PCA)")
-        st.info("💡 **How to interpret:** Each point represents a single property in the dataset. Properties located closer together have more similar characteristics across all scaled features (price, living area, bedrooms, bathrooms, grade, condition, etc.). Centroids represent the mathematical average center of each segment.")
-
-        # Compute PCA projection for visualization
-        X_scaled = scaled_df[prep_meta["selected_features"]].values
-        pca = PCA(n_components=2, random_state=config.RANDOM_STATE)
-        X_pca = pca.fit_transform(X_scaled)
-        centroids_pca = pca.transform(model.cluster_centers_)
-        var_pca = pca.explained_variance_ratio_ * 100
-
-        pca_plot_df = pd.DataFrame({
-            "PC1": X_pca[:, 0],
-            "PC2": X_pca[:, 1],
-            "Segment": clustered_orig["Segment Label"]
-        })
-        sample_pca = pca_plot_df.sample(n=min(5000, len(pca_plot_df)), random_state=config.RANDOM_STATE)
-
-        if HAS_PLOTLY:
-            fig_pca = px.scatter(
-                sample_pca,
-                x="PC1",
-                y="PC2",
-                color="Segment",
-                opacity=0.45,
-                title=f"Property Segments in 2D PCA Space (PC1: {var_pca[0]:.1f}%, PC2: {var_pca[1]:.1f}% Variance Explained)",
-                color_discrete_sequence=px.colors.qualitative.Bold
-            )
-            # Add Centroid Marks
-            for c_idx, pt in enumerate(centroids_pca):
-                fig_pca.add_trace(go.Scatter(
-                    x=[pt[0]],
-                    y=[pt[1]],
-                    mode="markers+text",
-                    marker=dict(symbol="x", size=15, color="black", line=dict(width=2, color="white")),
-                    text=[f"C{c_idx}"],
-                    textposition="top center",
-                    name=f"Centroid {c_idx}",
-                    showlegend=False
-                ))
-            fig_pca.update_layout(height=580, legend=dict(orientation="h", yanchor="bottom", y=-0.25, xanchor="center", x=0.5))
-            st.plotly_chart(fig_pca, use_container_width=True)
-        else:
-            fig_pca_mpl, _ = plot_pca_clusters(scaled_df, clustered_orig["Cluster"].values, centroids=model.cluster_centers_)
-            st.pyplot(fig_pca_mpl)
-
-        # Market Share Breakdown
-        st.markdown("#### Market Share Distribution Across Discovered Segments")
-        counts_df = pd.DataFrame([
-            {"Segment": c['display_title'], "Properties": c['count'], "Share (%)": c['percentage']}
-            for c in cards
-        ])
-        if HAS_PLOTLY:
-            fig_donut = px.pie(
-                counts_df,
-                names="Segment",
-                values="Properties",
-                hole=0.45,
-                title="Property Segment Market Share Breakdown",
-                color_discrete_sequence=px.colors.qualitative.Bold
-            )
-            fig_donut.update_traces(textinfo="percent+label")
-            st.plotly_chart(fig_donut, use_container_width=True)
-        else:
-            st.dataframe(counts_df, use_container_width=True, hide_index=True)
-
-    # ---------------------------------------------------------
-    # PAGE 5: ⚖ SEGMENT COMPARISON
-    # ---------------------------------------------------------
-    elif nav_choice == "⚖ Segment Comparison":
-        st.markdown("### ⚖ Segment Comparison Analytics")
-        st.markdown("Side-by-side comparison of core physical and valuation dimensions across all discovered property segments.")
-
-        # Comparative Bar Charts
-        c_bar1, c_bar2 = st.columns(2)
-        cards = get_segment_summary_cards(clustered_orig)
-        seg_labels = [c["display_title"] for c in cards]
-
-        with c_bar1:
-            st.markdown("#### Average Property Price by Segment")
-            if HAS_PLOTLY:
-                fig_c1 = px.bar(
-                    x=seg_labels,
-                    y=[c["avg_price"] for c in cards],
-                    labels={"x": "Property Segment", "y": "Average Price ($)"},
-                    title="Average Price Comparison ($ USD)",
-                    color=seg_labels,
-                    color_discrete_sequence=px.colors.qualitative.Safe
-                )
-                fig_c1.update_layout(showlegend=False, height=360)
-                st.plotly_chart(fig_c1, use_container_width=True)
-            else:
-                st.pyplot(plot_cluster_feature_comparisons(clustered_orig))
-
-        with c_bar2:
-            st.markdown("#### Average Living Area by Segment")
-            if HAS_PLOTLY:
-                fig_c2 = px.bar(
-                    x=seg_labels,
-                    y=[c["avg_area"] for c in cards],
-                    labels={"x": "Property Segment", "y": "Average Living Area (sqft)"},
-                    title="Average Living Area Comparison (Square Feet)",
-                    color=seg_labels,
-                    color_discrete_sequence=px.colors.qualitative.Safe
-                )
-                fig_c2.update_layout(showlegend=False, height=360)
-                st.plotly_chart(fig_c2, use_container_width=True)
-
-        c_bar3, c_bar4 = st.columns(2)
-        with c_bar3:
-            st.markdown("#### Average Bedrooms by Segment")
-            if HAS_PLOTLY:
-                fig_c3 = px.bar(
-                    x=seg_labels,
-                    y=[c["avg_beds"] for c in cards],
-                    labels={"x": "Property Segment", "y": "Average Bedrooms"},
-                    title="Average Bedroom Count Comparison",
-                    color=seg_labels,
-                    color_discrete_sequence=px.colors.qualitative.Safe
-                )
-                fig_c3.update_layout(showlegend=False, height=360)
-                st.plotly_chart(fig_c3, use_container_width=True)
-
-        with c_bar4:
-            st.markdown("#### Average Bathrooms by Segment")
-            if HAS_PLOTLY:
-                fig_c4 = px.bar(
-                    x=seg_labels,
-                    y=[c["avg_baths"] for c in cards],
-                    labels={"x": "Property Segment", "y": "Average Bathrooms"},
-                    title="Average Bathroom Count Comparison",
-                    color=seg_labels,
-                    color_discrete_sequence=px.colors.qualitative.Safe
-                )
-                fig_c4.update_layout(showlegend=False, height=360)
-                st.plotly_chart(fig_c4, use_container_width=True)
-
-        # Cross-Segment Metric Comparison Table
-        st.markdown("#### Comprehensive Cross-Segment Comparison Table")
-        st.dataframe(profile_table, use_container_width=True)
-
-        # Dynamic Narrative Interpretations
-        st.markdown("#### Data-Driven Segment Interpretations")
-        for c_id, text in interpretations.items():
-            with st.expander(f"📌 Segment {c_id}: Detailed Characterization", expanded=True):
-                st.markdown(text)
-
-    # ---------------------------------------------------------
-    # PAGE 6: 📍 SEGMENT MAP / SPATIAL VIEW
-    # ---------------------------------------------------------
-    elif nav_choice == "📍 Segment Map / Spatial View":
-        st.markdown("### 📍 Geographic & Spatial Segment Distribution")
-        st.markdown("Interactive spatial visualization of properties based on coordinates (`Lattitude` and `Longitude`) in the Kaggle dataset.")
-
-        lat_col = "Lattitude" if "Lattitude" in cleaned_df.columns else "latitude"
-        lon_col = "Longitude" if "Longitude" in cleaned_df.columns else "longitude"
-
-        has_coords = (
-            lat_col in cleaned_df.columns and 
-            lon_col in cleaned_df.columns and 
-            cleaned_df[lat_col].notnull().any() and 
-            cleaned_df[lon_col].notnull().any()
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Property Universe</div>
+                <div class="metric-value">{universe_metrics['total_properties']:,}</div>
+                <div class="metric-sub">Total examined properties</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with c2:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Price Spectrum</div>
+                <div class="metric-value">${p['median']:,.0f}</div>
+                <div class="metric-sub">Range: ${p['min']:,.0f} — ${p['max']:,.0f}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with c3:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Living Area Spectrum</div>
+                <div class="metric-value">{a['median']:,.0f} sqft</div>
+                <div class="metric-sub">Range: {a['min']:,.0f} — {a['max']:,.0f} sqft</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with c4:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Structural Era</div>
+                <div class="metric-value">{y['median']}</div>
+                <div class="metric-sub">Built: {y['min']} — {y['max']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
         )
 
-        if has_coords:
-            # Map filtering controls
-            m_col1, m_col2 = st.columns([1, 3])
-            with m_col1:
-                st.markdown("##### Spatial Filters")
-                map_segs = ["All Segments"] + sorted(clustered_orig["Segment Label"].unique().tolist())
-                sel_map_seg = st.selectbox("Filter by Segment:", options=map_segs, index=0)
-                map_sample_size = st.slider("Map Sample Size", min_value=500, max_value=min(8000, len(clustered_orig)), value=2500, step=500)
+    st.markdown("### Explore the Property Universe")
+    st.markdown("Inspect how properties naturally distribute across economic value and physical living area.")
 
-            map_filtered = clustered_orig if sel_map_seg == "All Segments" else clustered_orig[clustered_orig["Segment Label"] == sel_map_seg]
-            sample_map_df = map_filtered.sample(n=min(map_sample_size, len(map_filtered)), random_state=config.RANDOM_STATE)
+    col_chart, col_filter = st.columns([3, 1])
 
-            with m_col2:
-                # Standardize lat/lon for Streamlit
-                sample_map_df_std = sample_map_df.rename(columns={lat_col: "latitude", lon_col: "longitude"})
-                st.map(sample_map_df_std[["latitude", "longitude"]], zoom=8)
+    with col_filter:
+        st.markdown("#### Sample Filters")
+        sample_size = st.slider("Visualization Sample", 500, min(5000, len(usable_df)), 2500, step=500)
+        max_p = float(usable_df["Price"].max())
+        price_cutoff = st.slider("Price Cap Filter", int(p["min"]), int(max_p), int(min(max_p, 3000000)), step=100000)
+        color_by = st.selectbox("Color By", ["number of bedrooms", "grade of the house", "condition of the house", "Built Year"])
 
-            # Coordinate Density Plot by Segment
-            st.markdown("#### Spatial Coordinate Distribution (Latitude vs Longitude)")
-            if HAS_PLOTLY:
-                fig_geo = px.scatter(
-                    sample_map_df,
-                    x=lon_col,
-                    y=lat_col,
-                    color="Segment Label",
-                    opacity=0.45,
-                    title="Properties Grouped by Segment Across Geographic Coordinates",
-                    color_discrete_sequence=px.colors.qualitative.Dark24
-                )
-                fig_geo.update_layout(xaxis_title="Longitude", yaxis_title="Latitude", height=500)
-                st.plotly_chart(fig_geo, use_container_width=True)
+    with col_chart:
+        sub_df = usable_df[usable_df["Price"] <= price_cutoff].sample(
+            n=min(sample_size, len(usable_df[usable_df["Price"] <= price_cutoff])),
+            random_state=config.RANDOM_STATE
+        )
+
+        if HAS_PLOTLY:
+            fig = px.scatter(
+                sub_df,
+                x="living area",
+                y="Price",
+                color=color_by,
+                color_continuous_scale="Viridis",
+                labels={"living area": "Living Area (sqft)", "Price": "Property Price ($)"},
+                hover_data=["number of bedrooms", "number of bathrooms", "grade of the house"],
+                title=f"Property Inventory: Price vs. Living Area (Colored by {color_by})"
+            )
+            fig.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15, 23, 42, 0.6)",
+                font=dict(color="#CBD5E1"),
+                xaxis=dict(gridcolor="#1E293B"),
+                yaxis=dict(gridcolor="#1E293B"),
+                margin=dict(l=40, r=20, t=50, b=40)
+            )
+            st.plotly_chart(fig, use_container_width=True)
         else:
-            st.warning("No geographic coordinates found in this dataset. Displaying property distribution across distance metrics instead.")
-            dist_col = roles.get("airport_dist", "Distance from the airport")
-            if dist_col in clustered_orig:
-                fig_dist = px.box(clustered_orig, x="Segment Label", y=dist_col, color="Segment Label")
-                st.plotly_chart(fig_dist, use_container_width=True)
+            fig, ax = plt.subplots(figsize=(10, 5))
+            sns.scatterplot(data=sub_df, x="living area", y="Price", hue=color_by, ax=ax, palette="viridis", alpha=0.7)
+            ax.set_title(f"Property Inventory: Price vs. Living Area")
+            st.pyplot(fig)
 
-    # ---------------------------------------------------------
-    # PAGE 7: ⚙ CLUSTERING ANALYSIS (TECHNICAL)
-    # ---------------------------------------------------------
-    elif nav_choice == "⚙ Clustering Analysis":
-        st.markdown("### ⚙️ Clustering Methodology & Technical Validation")
-        st.markdown("Analytical verification of optimal K selection, Within-Cluster Sum of Squares (Inertia), and Silhouette scores.")
-
-        # Model Status Summary
-        st.markdown(f"""
-        - **Algorithm:** Unsupervised K-Means (`sklearn.cluster.KMeans`)
-        - **Official Recommended K:** `{recommended_k}` (based on Silhouette peak of `{k_decision['max_silhouette_score']:.4f}` and Elbow inflection)
-        - **Currently Evaluated K:** `{active_k}`
-        - **Convergence Status:** Reached in `{cluster_metrics['n_iterations']}` iterations
-        - **Final Inertia (WCSS):** `{cluster_metrics['inertia']:,.1f}`
-        - **Final Silhouette Score:** `{cluster_metrics['silhouette_score']:.4f}`
-        """)
-
-        # Elbow and Silhouette Curves
-        k_col1, k_col2 = st.columns(2)
-        with k_col1:
-            st.markdown("#### Elbow Method: K vs Inertia")
-            if HAS_PLOTLY:
-                fig_elb = go.Figure()
-                fig_elb.add_trace(go.Scatter(
-                    x=k_results_df["k"],
-                    y=k_results_df["inertia"],
-                    mode="lines+markers",
-                    name="Inertia",
-                    line=dict(color="#2563EB", width=3),
-                    marker=dict(size=8)
-                ))
-                fig_elb.add_vline(x=recommended_k, line_dash="dash", line_color="green", annotation_text=f"Official K={recommended_k}")
-                fig_elb.update_layout(xaxis_title="Clusters (K)", yaxis_title="Inertia (WCSS)", height=380)
-                st.plotly_chart(fig_elb, use_container_width=True)
-            else:
-                st.pyplot(plot_elbow_curve(k_results_df, selected_k=recommended_k))
-
-        with k_col2:
-            st.markdown("#### Silhouette Analysis: K vs Silhouette Score")
-            if HAS_PLOTLY:
-                fig_s = go.Figure()
-                fig_s.add_trace(go.Scatter(
-                    x=k_results_df["k"],
-                    y=k_results_df["silhouette_score"],
-                    mode="lines+markers",
-                    name="Silhouette Score",
-                    line=dict(color="#059669", width=3),
-                    marker=dict(size=8)
-                ))
-                fig_s.add_vline(x=recommended_k, line_dash="dash", line_color="green", annotation_text=f"Official K={recommended_k}")
-                fig_s.update_layout(xaxis_title="Clusters (K)", yaxis_title="Silhouette Score", height=380)
-                st.plotly_chart(fig_s, use_container_width=True)
-            else:
-                st.pyplot(plot_silhouette_curve(k_results_df, selected_k=recommended_k))
-
-        # Tested K Values Table
-        st.markdown("#### Evaluated Candidate K Values (K = 2 to 10)")
+    with st.expander("🔍 View Raw Inventory Records Sample"):
         st.dataframe(
-            k_results_df.style.format({"inertia": "{:,.1f}", "silhouette_score": "{:.4f}"}),
-            use_container_width=True,
-            hide_index=True
+            usable_df[["Price", "living area", "number of bedrooms", "number of bathrooms", "grade of the house", "condition of the house", "Built Year"]].head(25),
+            use_container_width=True
         )
 
-        st.info(f"💡 **Automated Decision Rationale:** {k_decision['rationale']}")
 
-        # Features Used
-        st.markdown("---")
-        st.markdown("#### Selected Clustering Features vs Excluded Identifiers")
-        fc1, fc2 = st.columns(2)
-        with fc1:
-            st.success(f"**Included Property Features ({len(prep_meta['selected_features'])}):**")
-            st.write(prep_meta["selected_features"])
-            st.caption("Standardized with `StandardScaler` to ensure scale-invariance across units.")
-        with fc2:
-            st.info(f"**Excluded Non-Physical Identifiers ({len(prep_meta['removed_features'])}):**")
-            st.write(prep_meta["removed_features"])
-            st.caption("Excluded to prevent arbitrary database indexes or dates from distorting property similarity.")
+# ==========================================
+# PAGE 2: 02 — PROPERTY LANDSCAPE
+# ==========================================
+def render_page_landscape(pca_df: pd.DataFrame, pca_centroids: np.ndarray, usable_df: pd.DataFrame, trust_meta: Dict[str, Any]):
+    dim = trust_meta["dimensionality"]
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 8 — PROPERTY LANDSCAPE
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                2D Projection of the {dim}-Dimensional Property Space
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Properties positioned closer together share more similar standardized characteristics across all {dim} dimensions.
+                This 2D PCA projection visualizes the continuous property similarity landscape with projected community centers.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-    # ---------------------------------------------------------
-    # PAGE 8: 📁 DATASET & QUALITY
-    # ---------------------------------------------------------
-    elif nav_choice == "📁 Dataset & Quality":
-        st.markdown("### 📁 Dataset Inspection & Data Quality Audit")
-        st.markdown("Verification of Kaggle House Price Dataset of India schema, completeness, and preprocessing.")
+    st.info(
+        f"ℹ️ **Methodology Note**: Principal Component Analysis (PCA) is employed strictly for 2D visual projection. "
+        f"The actual K-Means segmentation operates on the full {dim}-dimensional standardized space."
+    )
 
-        d_col1, d_col2, d_col3, d_col4 = st.columns(4)
-        with d_col1:
-            st.metric("Raw Records", f"{raw_summary['rows']:,}")
-        with d_col2:
-            st.metric("Cleaned Records", f"{prep_meta['records_after']:,}")
-        with d_col3:
-            st.metric("Missing Values", f"{prep_meta['missing_after']}")
-        with d_col4:
-            st.metric("Duplicates Removed", f"{prep_meta['duplicates_removed']}")
+    sample_size = min(3500, len(pca_df))
+    sub_pca = pca_df.sample(n=sample_size, random_state=config.RANDOM_STATE)
 
-        st.markdown("#### Raw Dataset Preview (First 15 Rows)")
-        st.dataframe(raw_df.head(15), use_container_width=True)
+    if HAS_PLOTLY:
+        fig = px.scatter(
+            sub_pca,
+            x="PCA_1",
+            y="PCA_2",
+            color="Segment Name",
+            labels={"PCA_1": "Principal Dimension 1 (Scale & Quality)", "PCA_2": "Principal Dimension 2 (Age & Structural Variance)"},
+            hover_data=["Price", "living area", "number of bedrooms", "number of bathrooms"],
+            title=f"Property Similarity Landscape ({sample_size:,} Properties Sampled)",
+            color_discrete_sequence=["#38BDF8", "#F59E0B", "#10B981", "#8B5CF6", "#EC4899"]
+        )
 
-        st.markdown("#### Schema & Data Types Breakdown")
-        schema_df = pd.DataFrame({
-            "Column Name": list(raw_summary["dtypes"].keys()),
-            "Data Type": list(raw_summary["dtypes"].values()),
-            "Missing Values": [raw_summary["missing_values"][c] for c in raw_summary["dtypes"].keys()],
-            "Role in Pipeline": ["Included Feature" if c in prep_meta["selected_features"] else "Excluded Identifier" for c in raw_summary["dtypes"].keys()]
-        })
-        st.dataframe(schema_df, use_container_width=True, height=400, hide_index=True)
+        # Overlay Community Centroids
+        for i, c_coord in enumerate(pca_centroids):
+            fig.add_trace(
+                go.Scatter(
+                    x=[c_coord[0]],
+                    y=[c_coord[1]],
+                    mode="markers+text",
+                    marker=dict(symbol="x", size=14, color="#FFFFFF", line=dict(width=2, color="#000000")),
+                    text=[f"Community {i} Center"],
+                    textposition="top center",
+                    name=f"Centroid {i}",
+                    showlegend=False
+                )
+            )
 
-    # ---------------------------------------------------------
-    # PAGE 9: 📑 PROPERTY SEGMENTATION SUMMARY
-    # ---------------------------------------------------------
-    elif nav_choice == "📑 Property Segmentation Summary":
-        st.markdown("### 📑 Property Segmentation Summary & Export")
-        st.markdown("Final executive overview of the market segmentation project and downloadable deliverables.")
+        fig.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(15, 23, 42, 0.6)",
+            font=dict(color="#CBD5E1"),
+            xaxis=dict(gridcolor="#1E293B"),
+            yaxis=dict(gridcolor="#1E293B"),
+            height=600,
+            margin=dict(l=40, r=20, t=50, b=40)
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown(f"""
-        #### Executive Summary
-        - **Total Properties Analyzed:** **{len(clustered_orig):,}**
-        - **Optimal Number of Discovered Segments:** **{recommended_k}** (Currently active: **{active_k}**)
-        - **Clustering Silhouette Coefficient:** **{cluster_metrics['silhouette_score']:.4f}**
-        - **Dimensionality Reduction:** 2D PCA projects properties explaining **{pca.explained_variance_ratio_[0]*100 + pca.explained_variance_ratio_[1]*100:.1f}%** of total scaled variance.
-        """)
+    # Market Pattern Deep Dive (Trendlines using pure NumPy)
+    st.markdown("### Bivariate Market Patterns")
+    col_p1, col_p2 = st.columns(2)
 
-        st.markdown("#### Major Discovered Market Segments")
-        cards = get_segment_summary_cards(clustered_orig)
-        for card in cards:
-            st.markdown(f"- **{card['display_title']}:** Represents **{card['count']:,} properties ({card['percentage']:.1f}%)** with an average valuation of **${card['avg_price']:,.0f}**, average living area of **{card['avg_area']:,.0f} sqft**, and average layout of **{card['avg_beds']:.1f} bedrooms**.")
-
-        st.markdown("---")
-        st.markdown("#### ⬇️ Download Segment Deliverables")
+    with col_p1:
+        st.markdown("#### Living Area vs. Price Relationship")
+        sample_pat = usable_df.sample(n=min(2000, len(usable_df)), random_state=config.RANDOM_STATE)
         
-        dl_col1, dl_col2 = st.columns(2)
-        with dl_col1:
-            # Export 1: Clustered House Dataset with Cluster ID and Segment Name
-            csv_buf1 = io.StringIO()
-            clustered_orig.to_csv(csv_buf1, index=False)
-            st.download_button(
-                label="📥 Download Clustered Dataset (CSV)",
-                data=csv_buf1.getvalue(),
-                file_name="clustered_house_data.csv",
-                mime="text/csv",
-                help="Exports the full dataset with assigned Cluster ID and Segment Name.",
-                use_container_width=True
+        if HAS_PLOTLY:
+            fig_trend = px.scatter(
+                sample_pat,
+                x="living area",
+                y="Price",
+                opacity=0.6,
+                color_discrete_sequence=["#38BDF8"]
+            )
+            # Add pure numpy trendline
+            x_vals = sample_pat["living area"].values
+            y_vals = sample_pat["Price"].values
+            poly = np.polyfit(x_vals, y_vals, 1)
+            x_line = np.linspace(x_vals.min(), x_vals.max(), 100)
+            y_line = poly[0] * x_line + poly[1]
+            fig_trend.add_trace(go.Scatter(x=x_line, y=y_line, mode="lines", name="Linear Trend", line=dict(color="#F59E0B", width=2)))
+            fig_trend.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15, 23, 42, 0.6)",
+                font=dict(color="#CBD5E1"),
+                xaxis=dict(title="Living Area (sqft)", gridcolor="#1E293B"),
+                yaxis=dict(title="Price ($)", gridcolor="#1E293B"),
+                margin=dict(l=20, r=20, t=20, b=20)
+            )
+            st.plotly_chart(fig_trend, use_container_width=True)
+
+    with col_p2:
+        st.markdown("#### Price Distribution Across Bedroom Capacity")
+        if HAS_PLOTLY:
+            bed_filtered = usable_df[usable_df["number of bedrooms"].between(1, 6)]
+            fig_box = px.box(
+                bed_filtered,
+                x="number of bedrooms",
+                y="Price",
+                color="number of bedrooms",
+                color_discrete_sequence=px.colors.sequential.Tealgrn
+            )
+            fig_box.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15, 23, 42, 0.6)",
+                font=dict(color="#CBD5E1"),
+                xaxis=dict(title="Number of Bedrooms", gridcolor="#1E293B"),
+                yaxis=dict(title="Price ($)", gridcolor="#1E293B"),
+                showlegend=False,
+                margin=dict(l=20, r=20, t=20, b=20)
+            )
+            st.plotly_chart(fig_box, use_container_width=True)
+
+
+# ==========================================
+# PAGE 3: 03 — SEGMENT DISCOVERY
+# ==========================================
+def render_page_discovery(
+    k_results_df: pd.DataFrame,
+    k_meta: Dict[str, Any],
+    conv_info: Dict[str, Any],
+    active_k: int,
+    recommended_k: int
+):
+    st.markdown(
+        """
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 5 & 6 — K DISCOVERY & COMMUNITY FORMATION
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                How Many Property Communities Exist?
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Evaluating cluster separation and compactness across K = 2 through 10.
+                Zero supervised ground-truth labels or classification targets — community selection is determined by mathematical partition boundaries.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Metrics Summary
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Elbow Inflection</div>
+                <div class="metric-value">K = {k_meta['elbow_k']}</div>
+                <div class="metric-sub">Geometric WCSS trade-off</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with m2:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Peak Silhouette</div>
+                <div class="metric-value">K = {k_meta['silhouette_k']}</div>
+                <div class="metric-sub">Score: {k_meta['peak_silhouette_score']:.4f}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with m3:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Official Recommended K</div>
+                <div class="metric-value" style="color: #10B981;">K = {recommended_k}</div>
+                <div class="metric-sub">Data-driven selection</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with m4:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Currently Active K</div>
+                <div class="metric-value" style="color: {'#10B981' if active_k == recommended_k else '#F59E0B'};">K = {active_k}</div>
+                <div class="metric-sub">Controlled via sidebar slider</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    st.markdown(
+        f"""
+        <div style="background: #131C31; border-left: 4px solid #38BDF8; padding: 14px 18px; border-radius: 4px; margin-bottom: 20px;">
+            <div style="font-weight: 700; color: #F8FAFC; margin-bottom: 4px;">Selection Rationale:</div>
+            <div style="color: #CBD5E1; font-size: 0.95rem;">{k_meta['rationale']}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # K Discovery Lab Charts
+    st.markdown("### K Discovery Lab: Mathematical Curves")
+    col_elbow, col_sil = st.columns(2)
+
+    with col_elbow:
+        if HAS_PLOTLY:
+            fig_elbow = px.line(
+                k_results_df,
+                x="K",
+                y="Inertia",
+                markers=True,
+                title="Elbow Method (Within-Cluster Sum of Squares)",
+                labels={"Inertia": "WCSS Inertia", "K": "Number of Clusters (K)"}
+            )
+            # Highlight elbow
+            elbow_val = k_results_df.loc[k_results_df["K"] == k_meta["elbow_k"], "Inertia"].values[0]
+            fig_elbow.add_trace(go.Scatter(x=[k_meta["elbow_k"]], y=[elbow_val], mode="markers", marker=dict(color="#F59E0B", size=12), name="Elbow Inflection"))
+            fig_elbow.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15, 23, 42, 0.6)",
+                font=dict(color="#CBD5E1"),
+                xaxis=dict(gridcolor="#1E293B", dtick=1),
+                yaxis=dict(gridcolor="#1E293B"),
+                margin=dict(l=20, r=20, t=40, b=20)
+            )
+            st.plotly_chart(fig_elbow, use_container_width=True)
+
+    with col_sil:
+        if HAS_PLOTLY:
+            fig_sil = px.line(
+                k_results_df,
+                x="K",
+                y="Silhouette Score",
+                markers=True,
+                title="Silhouette Analysis (Boundary Cohesion & Separation)",
+                labels={"Silhouette Score": "Silhouette Score", "K": "Number of Clusters (K)"}
+            )
+            fig_sil.update_traces(line_color="#10B981")
+            peak_val = k_results_df.loc[k_results_df["K"] == k_meta["silhouette_k"], "Silhouette Score"].values[0]
+            fig_sil.add_trace(go.Scatter(x=[k_meta["silhouette_k"]], y=[peak_val], mode="markers", marker=dict(color="#38BDF8", size=12), name="Peak Silhouette"))
+            fig_sil.update_layout(
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(15, 23, 42, 0.6)",
+                font=dict(color="#CBD5E1"),
+                xaxis=dict(gridcolor="#1E293B", dtick=1),
+                yaxis=dict(gridcolor="#1E293B"),
+                margin=dict(l=20, r=20, t=40, b=20)
+            )
+            st.plotly_chart(fig_sil, use_container_width=True)
+
+    st.markdown("### How K-Means Discovers Property Communities")
+    st.markdown(
+        """
+        Rather than a black-box supervised prediction model, K-Means is an iterative unsupervised optimization algorithm:
+        1. **Initialize Candidate Centers**: Initial candidate community centers are placed using the k-means++ probabilistic heuristic.
+        2. **Standardized Association**: Every property is assigned to its nearest community center in the multidimensional standardized similarity space.
+        3. **Recalculate Centroids**: Center positions are updated to the mean vector of all properties assigned to that community.
+        4. **Convergence Stabilization**: Steps 2 and 3 repeat until property assignments stabilize and centroids cease to move beyond tolerance.
+        """
+    )
+
+    st.markdown(
+        f"""
+        <div style="background: #0F172A; border: 1px solid #1E293B; border-radius: 8px; padding: 16px; margin-top: 12px;">
+            <div style="font-weight: 700; color: #38BDF8;">Active Model Convergence Metrics (K = {active_k}):</div>
+            <div style="color: #94A3B8; font-size: 0.9rem; margin-top: 6px;">
+                • Iterations to Converge: <strong style="color: #F8FAFC;">{conv_info['iterations_to_converge']}</strong><br>
+                • Final Inertia (WCSS): <strong style="color: #F8FAFC;">{conv_info['inertia']:,.1f}</strong><br>
+                • Silhouette Score: <strong style="color: #F8FAFC;">{conv_info['silhouette_score']:.4f}</strong>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+
+# ==========================================
+# PAGE 4: 04 — SEGMENT DNA
+# ==========================================
+def render_page_segment_dna(
+    dna_profiles: List[Dict[str, Any]],
+    comp_table: pd.DataFrame,
+    clustered_df: pd.DataFrame
+):
+    st.markdown(
+        """
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 7 — SEGMENT DNA
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                Property Community DNA & Profiles
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Every discovered property community possesses a unique architectural and economic fingerprint.
+                Normalized relative indicators display each segment's typical standing across the property universe.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.caption("⚠️ **Note**: Progress bars represent normalized relative positions (0-100% within the dataset), NOT probabilities or confidence scores.")
+
+    # Render Segment DNA Cards
+    for profile in dna_profiles:
+        st.markdown(
+            f"""
+            <div class="dna-card">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div class="dna-title">{profile['segment_name']}</div>
+                        <span class="dna-badge">Segment {profile['cluster_id']}</span>
+                        <span class="tag-badge">Market Share: {profile['share_pct']}% ({profile['property_count']:,} homes)</span>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 1.5rem; font-weight: 800; color: #38BDF8;">${profile['avg_price']:,.0f}</div>
+                        <div style="font-size: 0.78rem; color: #64748B;">Average Segment Price</div>
+                    </div>
+                </div>
+                <div style="color: #CBD5E1; font-size: 0.92rem; margin: 12px 0 16px 0; line-height: 1.5;">
+                    {profile['narrative']}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # Show DNA Fingerprint Bars
+        col_bars, col_stats = st.columns([3, 2])
+        with col_bars:
+            st.markdown(f"**Visual DNA Fingerprint — {profile['segment_name']}**")
+            for dim in profile["fingerprint_dimensions"]:
+                st.markdown(
+                    f"""
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-size: 0.85rem; color: #94A3B8; width: 180px;">{dim['dimension']}</span>
+                        <span class="code-bar" style="font-size: 0.9rem;">{dim['bar']} {dim['score_pct']}%</span>
+                        <span style="font-size: 0.8rem; color: #64748B; width: 120px; text-align: right;">{dim['formatted_raw']}</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+
+        with col_stats:
+            st.markdown("**Key Segment Characteristics**")
+            for trait_name, trait_desc in profile["traits"].items():
+                st.markdown(f"• **{trait_name}**: `{trait_desc}`")
+            st.markdown(f"• **Typical Living Area**: `{profile['avg_living_area']:,.0f} sqft`")
+            st.markdown(f"• **Typical Layout**: `{profile['avg_bedrooms']:.1f} beds, {profile['avg_bathrooms']:.2f} baths`")
+            st.markdown(f"• **Typical Build Era**: `{int(profile['avg_built_year'])}`")
+
+        st.markdown("<hr style='border: 1px solid #1E293B; margin: 24px 0;'>", unsafe_allow_html=True)
+
+    # Cross-Segment Comparison Table
+    st.markdown("### Cross-Segment Comparative Profile")
+    st.dataframe(comp_table, use_container_width=True)
+
+
+# ==========================================
+# PAGE 5: 05 — SPATIAL INTELLIGENCE
+# ==========================================
+def render_page_spatial(spatial_engine: SpatialIntelligence, segment_names: Dict[int, str]):
+    st.markdown(
+        """
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 9 — SPATIAL INTELLIGENCE
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                Geographic Distribution of Property Segments
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Explore how discovered property communities cluster geographically.
+                Examines empirical coordinate distributions without fabricating unsupported neighborhood claims.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    provenance = spatial_engine.get_provenance_audit()
+    if not provenance["valid"]:
+        st.warning("Valid geographic coordinates are not available in this dataset.")
+        return
+
+    # Document Provenance Explicitly
+    b = provenance["bounds"]
+    st.info(f"📍 **Geographic Provenance Notice**: {provenance['provenance_statement']}")
+
+    # Map Filter Controls
+    col_map_filter, col_map_disp = st.columns([1, 3])
+
+    with col_map_filter:
+        st.markdown("#### Spatial Filters")
+        selected_clusters = st.multiselect(
+            "Filter by Community",
+            options=list(segment_names.keys()),
+            format_func=lambda x: f"Segment {x}: {segment_names[x]}",
+            default=list(segment_names.keys())
+        )
+        sample_limit = st.slider("Map Render Limit", 500, 5000, 2500, step=500)
+
+    # Filter spatial data
+    filtered_map_df, map_stats = spatial_engine.filter_spatial_inventory(
+        segment_filter=selected_clusters if len(selected_clusters) > 0 else None,
+        sample_limit=sample_limit
+    )
+
+    with col_map_disp:
+        st.markdown(
+            f"**Displaying {map_stats['sample_displayed']:,} Properties (Total Matching: {map_stats['total_matching']:,})**"
+        )
+        # Render Streamlit Native Map
+        st.map(filtered_map_df[["latitude", "longitude"]], zoom=9)
+
+    # Descriptive Spatial Breakdown
+    st.markdown("### Spatial Composition Breakdown")
+    comp_cols = st.columns(len(map_stats["composition"]) if len(map_stats["composition"]) > 0 else 1)
+    for i, (seg_name, seg_data) in enumerate(map_stats["composition"].items()):
+        with comp_cols[i % len(comp_cols)]:
+            st.markdown(
+                f"""
+                <div class="metric-card">
+                    <div class="metric-label">{seg_name}</div>
+                    <div class="metric-value">{seg_data['share_pct']}%</div>
+                    <div class="metric-sub">{seg_data['count']:,} properties visible</div>
+                </div>
+                """,
+                unsafe_allow_html=True
             )
 
-        with dl_col2:
-            # Export 2: Segment Profiles Summary CSV
-            csv_buf2 = io.StringIO()
-            profile_table.to_csv(csv_buf2)
-            st.download_button(
-                label="📥 Download Segment Profiles Summary (CSV)",
-                data=csv_buf2.getvalue(),
-                file_name="segment_profiles_summary.csv",
-                mime="text/csv",
-                help="Exports the aggregated statistical profile table for all segments.",
-                use_container_width=True
-            )
 
-        st.markdown("<br>", unsafe_allow_html=True)
-        # Property Segmentation Architecture Diagram
-        with st.expander("🏗️ View Property Segmentation System Architecture", expanded=True):
-            st.markdown("""
-```text
-                      HOUSE DATASET (Kaggle India)
-                                   ↓
-                          DATA QUALITY CHECK
-                                   ↓
-                         PROPERTY FEATURE SET
-                                   ↓
-                          DATA PREPROCESSING
-                                   ↓
-                           FEATURE SCALING (StandardScaler)
-                                   ↓
-                      ┌────────────┴────────────┐
-                      ↓                         ↓
-                 ELBOW METHOD             SILHOUETTE SCORE
-                      └────────────┬────────────┘
-                                   ↓
-                            OPTIMAL K (K=2)
-                                   ↓
-                             K-MEANS MODEL
-                                   ↓
-                           PROPERTY SEGMENTS
-                                   ↓
-                    ┌──────────────┼──────────────┐
-                    ↓              ↓              ↓
-              SEGMENT SIZE   SEGMENT PROFILE   PCA 2D VIEW
-                    ↓              ↓              ↓
-                    └──────────────┼──────────────┘
-                                   ↓
-                        PROPERTY MARKET INSIGHTS
-```
-            """)
+# ==========================================
+# PAGE 6: 06 — PROPERTY MATCH
+# ==========================================
+def render_page_property_match(
+    matcher: PropertyMatcher,
+    universe_metrics: Dict[str, Any],
+    usable_df: pd.DataFrame
+):
+    st.markdown(
+        """
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 10 — PROPERTY MATCH
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                Find My Property Segment
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Simulate a property to find its closest market community.
+                Attributes are transformed through the <strong>already-fitted StandardScaler</strong> and assigned to the nearest learned cluster centroid.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    st.caption("ℹ️ **Unsupervised Matching**: Assignment is determined by standardized Euclidean distance to learned cluster centroids. This is NOT a supervised prediction or confidence probability.")
+
+    p = universe_metrics["price_metrics"]
+    a = universe_metrics["area_metrics"]
+    y = universe_metrics["year_metrics"]
+
+    col_in1, col_in2, col_in3 = st.columns(3)
+    with col_in1:
+        st.markdown("#### Economic & Size")
+        input_price = st.number_input(
+            "Price ($)",
+            min_value=int(p["min"]),
+            max_value=int(p["max"]),
+            value=int(p["median"]),
+            step=25000
+        )
+        input_area = st.number_input(
+            "Living Area (sqft)",
+            min_value=int(a["min"]),
+            max_value=int(a["max"]),
+            value=int(a["median"]),
+            step=50
+        )
+        input_lot = st.number_input(
+            "Lot Area (sqft)",
+            min_value=500,
+            max_value=100000,
+            value=7500,
+            step=500
+        )
+
+    with col_in2:
+        st.markdown("#### Layout & Quality")
+        input_beds = st.number_input("Bedrooms", min_value=1, max_value=10, value=3, step=1)
+        input_baths = st.number_input("Bathrooms", min_value=1.0, max_value=8.0, value=2.0, step=0.25)
+        input_floors = st.number_input("Floors", min_value=1.0, max_value=4.0, value=1.5, step=0.5)
+        input_grade = st.slider("Construction Grade (1–13)", 1, 13, 7)
+
+    with col_in3:
+        st.markdown("#### Structural Condition & Age")
+        input_cond = st.slider("House Condition (1–5)", 1, 5, 3)
+        input_year = st.slider("Built Year", int(y["min"]), int(y["max"]), int(y["median"]))
+        input_views = st.slider("Number of Views", 0, 4, 0)
+        input_waterfront = st.selectbox("Waterfront Present", [0, 1], format_func=lambda x: "Yes" if x == 1 else "No")
+
+    # Assemble User Property Dictionary
+    user_property = {
+        "Price": float(input_price),
+        "living area": float(input_area),
+        "lot area": float(input_lot),
+        "number of bedrooms": float(input_beds),
+        "number of bathrooms": float(input_baths),
+        "number of floors": float(input_floors),
+        "grade of the house": float(input_grade),
+        "condition of the house": float(input_cond),
+        "Built Year": float(input_year),
+        "number of views": float(input_views),
+        "waterfront present": float(input_waterfront),
+    }
+
+    st.markdown("---")
+
+    # Match Property Button
+    if st.button("🚀 Match Property with Market Segment", type="primary"):
+        match_result = matcher.match_property(user_property)
+
+        # Show Validation Warnings if values are extreme
+        if match_result["validation_warnings"]:
+            for warn in match_result["validation_warnings"]:
+                st.warning(f"⚠️ {warn}")
+
+        st.markdown(
+            f"""
+            <div style="background: linear-gradient(135deg, #1E3A8A 0%, #0F172A 100%); border: 1px solid #38BDF8; border-radius: 12px; padding: 24px; margin: 18px 0;">
+                <div style="font-size: 0.85rem; color: #93C5FD; font-weight: 700; text-transform: uppercase;">
+                    YOUR PROPERTY MATCH
+                </div>
+                <div style="font-size: 2rem; font-weight: 800; color: #FFFFFF; margin: 6px 0;">
+                    {match_result['matched_segment_name']}
+                </div>
+                <div style="color: #CBD5E1; font-size: 0.95rem;">
+                    Proximity to Community Centroid: <strong style="color: #38BDF8;">{match_result['distance_to_centroid']}</strong> (Standardized Euclidean distance in {match_result['dimensionality']}D space)
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+        # Why this match? Comparison Table
+        st.markdown("### Why This Match? Centroid Comparison")
+        st.markdown("How your simulated property compares against the typical centroid metrics of the matched community:")
+
+        comp_data = []
+        for c in match_result["comparison"]:
+            comp_data.append({
+                "Attribute": c["attribute"],
+                "Your Property": f"{c['your_property']:,.1f}",
+                "Segment Typical": f"{c['segment_typical']:,.1f}",
+                "Delta": f"{c['delta']:+,.1f}",
+                "Difference (%)": f"{c['delta_pct']:+.1f}%"
+            })
+        st.dataframe(pd.DataFrame(comp_data), use_container_width=True)
+
+        with st.expander("📊 Distance to All Discovered Communities"):
+            for seg, dist in match_result["all_distances"].items():
+                st.write(f"• **{seg}**: Standardized distance = `{dist}`")
+
+
+# ==========================================
+# PAGE 7: 07 — SIMILAR PROPERTY FINDER
+# ==========================================
+def render_page_similar_finder(
+    sim_engine: SimilarityEngine,
+    sig_engine: PropertySignatureEngine,
+    clustered_df: pd.DataFrame
+):
+    st.markdown(
+        """
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 4 — SIMILAR PROPERTY FINDER
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                Nearest-Neighbor Similarity Explorer
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Select any property to retrieve its closest peers in the standardized feature space.
+                Nearest neighbors are identified via standardized Euclidean distance, strictly excluding the query property itself.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    col_pick, col_btn = st.columns([3, 1])
+    with col_pick:
+        # Allow choosing by ID or index
+        id_options = list(clustered_df["id"].values[:500]) if "id" in clustered_df.columns else list(clustered_df.index[:500])
+        selected_id = st.selectbox("Select Property Identifier:", options=id_options, index=0)
+
+    # Retrieve similar properties
+    try:
+        similar_result = sim_engine.find_similar_properties(selected_id, top_n=5)
+    except Exception as e:
+        st.error(f"Error querying similar properties: {e}")
+        return
+
+    q = similar_result["query_property"]
+
+    # Display Query Property Details
+    st.markdown("### Selected Query Property")
+    q1, q2, q3, q4, q5 = st.columns(5)
+    with q1:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Property ID</div>
+                <div class="metric-value" style="font-size: 1.2rem;">#{q['id']}</div>
+                <div class="metric-sub">{q['segment_name']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with q2:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Price</div>
+                <div class="metric-value" style="font-size: 1.2rem;">${q['price']:,.0f}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with q3:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Living Area</div>
+                <div class="metric-value" style="font-size: 1.2rem;">{q['living_area']:,.0f} sqft</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with q4:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Bedrooms</div>
+                <div class="metric-value" style="font-size: 1.2rem;">{int(q['bedrooms'])} beds</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with q5:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Built Year</div>
+                <div class="metric-value" style="font-size: 1.2rem;">{int(q['built_year'])}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # Query Property Signature
+    sig = sig_engine.generate_signature(q)
+    with st.expander("🧬 View Query Property Signature (Normalized Relative Indicators)"):
+        st.caption(sig["interpretation_label"])
+        for dim in sig["dimensions"]:
+            st.markdown(f"• **{dim['dimension']}**: `{dim['bar']} {dim['score_pct']}%` ({dim['formatted_raw']})")
+
+    st.markdown("### Most Similar Properties in Standardized Space")
+    st.caption("ℹ️ **Note**: Standardized Euclidean distance measures multi-attribute distance. The queried property is strictly excluded from these results.")
+
+    peers_df = pd.DataFrame(similar_result["similar_properties"])
+    st.dataframe(
+        peers_df[["id", "euclidean_distance", "similarity_index_pct", "price", "living_area", "bedrooms", "bathrooms", "grade", "built_year", "segment_name"]],
+        use_container_width=True
+    )
+
+
+# ==========================================
+# PAGE 8: 08 — METHOD & DATA TRUST
+# ==========================================
+def render_page_method_trust(
+    trust_meta: Dict[str, Any],
+    k_meta: Dict[str, Any],
+    conv_info: Dict[str, Any]
+):
+    dim = trust_meta["dimensionality"]
+    st.markdown(
+        f"""
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 2 & 8 — METHODOLOGY & DATA TRUST
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                Data Trust Panel & Analytical Foundations
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Transparency in data preparation, domain-specific feature roles, and mathematical clustering formulations.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Data Trust Metrics
+    st.markdown("### Data Trust Audit Panel")
+    t1, t2, t3, t4 = st.columns(4)
+    with t1:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Examined Records</div>
+                <div class="metric-value">{trust_meta['properties_examined']:,}</div>
+                <div class="metric-sub">Raw dataset inventory</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with t2:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Usable Inventory</div>
+                <div class="metric-value">{trust_meta['usable_properties']:,}</div>
+                <div class="metric-sub">Completeness: {trust_meta['missing_value_completeness_pct']}%</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with t3:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Segmentation Features</div>
+                <div class="metric-value">{trust_meta['features_suitable_for_segmentation']}</div>
+                <div class="metric-sub">{dim}-dimensional space</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+    with t4:
+        st.markdown(
+            f"""
+            <div class="metric-card">
+                <div class="metric-label">Excluded Columns</div>
+                <div class="metric-value">{trust_meta['features_excluded']}</div>
+                <div class="metric-sub">Identifiers, postal code</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # Anomaly Audit Log
+    if trust_meta["anomaly_log"]:
+        st.markdown("#### Documented Anomaly Treatment")
+        for anom in trust_meta["anomaly_log"]:
+            st.info(f"📋 Record ID **#{anom['id']}**: {anom['reason']}")
+
+    # Feature Roles Categorization
+    st.markdown("### Domain Feature Roles")
+    st.markdown("Features are categorized according to their real-estate role rather than generic data types:")
+    
+    role_cols = st.columns(len(trust_meta["feature_roles"]))
+    for i, (role_name, col_list) in enumerate(trust_meta["feature_roles"].items()):
+        with role_cols[i % len(role_cols)]:
+            st.markdown(f"**{role_name}**")
+            for c in col_list:
+                st.markdown(f"• `{c}`")
+
+    # Mathematical Foundations
+    st.markdown("### Mathematical Similarity Foundations")
+    st.markdown(
+        r"""
+        #### 1. Standardization (StandardScaler)
+        Properties use vastly different measurement units. Price is measured in hundreds of thousands, while bedroom counts range from 1 to 10.
+        Standardization transforms each feature to mean 0 and unit variance:
+        $$z = \frac{x - \mu}{\sigma}$$
+        This ensures that no single large-magnitude feature artificially dominates the similarity distance.
+
+        #### 2. Multidimensional Similarity Metric
+        Distance between properties $u$ and $v$ is computed via standardized Euclidean distance across all $N$ dimensions:
+        $$d(u, v) = \sqrt{\sum_{i=1}^{N} (u_i - v_i)^2}$$
+
+        #### 3. Unsupervised Clustering Objective
+        K-Means minimizes Within-Cluster Sum of Squares (Inertia) across all partitions:
+        $$J = \sum_{j=1}^{K} \sum_{x \in S_j} \|x - \mu_j\|^2$$
+        """
+    )
+
+
+# ==========================================
+# PAGE 9: 09 — INSIGHTS & EXPORT
+# ==========================================
+def render_page_insights_export(
+    clustered_df: pd.DataFrame,
+    comp_table: pd.DataFrame,
+    dna_profiles: List[Dict[str, Any]],
+    trust_meta: Dict[str, Any]
+):
+    st.markdown(
+        """
+        <div style="margin-bottom: 24px;">
+            <div style="font-size: 0.85rem; color: #38BDF8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;">
+                STAGE 11 — MARKET INSIGHTS & EXPORTS
+            </div>
+            <h1 style="font-size: 2.2rem; font-weight: 800; color: #F8FAFC; margin-top: 4px; margin-bottom: 8px;">
+                Executive Insights & Analytical Deliverables
+            </h1>
+            <p style="color: #94A3B8; font-size: 1.05rem; max-width: 900px;">
+                Synthesized property intelligence and downloadable segmentation datasets.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Core Architecture Diagram
+    st.markdown("### Core System Architecture")
+    st.code(InsightEngine.get_architecture_diagram(), language="text")
+
+    # Executive Insights
+    st.markdown("### Executive Takeaways")
+    insights = InsightEngine.generate_executive_insights(clustered_df, dna_profiles, trust_meta)
+    for ins in insights:
+        st.markdown(f"• {ins}")
+
+    # Export Section
+    st.markdown("### Analytical Deliverables (CSV Downloads)")
+    col_d1, col_d2 = st.columns(2)
+
+    with col_d1:
+        st.markdown("#### Clustered Property Dataset")
+        st.write("Complete dataset with attached `Cluster` ID and data-driven `Segment Name`.")
+        csv_clustered = clustered_df.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            label="📥 Download Clustered Dataset (CSV)",
+            data=csv_clustered,
+            file_name="clustered_house_data.csv",
+            mime="text/csv"
+        )
+
+    with col_d2:
+        st.markdown("#### Segment DNA Profiles")
+        st.write("Side-by-side comparative table of all discovered community metrics.")
+        csv_profiles = comp_table.to_csv(index=True).encode("utf-8")
+        st.download_button(
+            label="📥 Download Segment Profiles (CSV)",
+            data=csv_profiles,
+            file_name="segment_profiles.csv",
+            mime="text/csv"
+        )
+
 
 if __name__ == "__main__":
     main()

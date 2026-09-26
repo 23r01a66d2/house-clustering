@@ -1,44 +1,58 @@
-# Property Segmentation Analytics
-## House Clustering Using K-Means Clustering Techniques
+# Property Intelligence & Segment Discovery System
+## Multidimensional Property Similarity Space & Community Discovery via K-Means
 
-An end-to-end unsupervised machine learning and business intelligence platform for property segmentation on the **Kaggle House Price Dataset of India**. 
-
-The system discovers natural groupings among properties based on physical attributes, construction quality, layout, spatial coordinates, and market valuation, without relying on arbitrary assumptions or hard-coded rules.
+An advanced unsupervised machine-learning platform that structures housing inventory into a standardized multidimensional similarity space, discovers natural property communities using **K-Means Clustering**, profiles their distinct architectural & economic DNA, and enables interactive property matching and nearest-neighbor peer discovery.
 
 ---
 
-## 🏗️ System Architecture
+## 🏗️ Core System Architecture
 
 ```text
-                      HOUSE DATASET (Kaggle India)
-                                   ↓
-                          DATA QUALITY CHECK
-                                   ↓
-                         PROPERTY FEATURE SET
-                                   ↓
-                          DATA PREPROCESSING
-                                   ↓
-                           FEATURE SCALING (StandardScaler)
-                                   ↓
-                      ┌────────────┴────────────┐
-                      ↓                         ↓
-                 ELBOW METHOD             SILHOUETTE SCORE
-                      └────────────┬────────────┘
-                                   ↓
-                            OPTIMAL K (K=2)
-                                   ↓
-                             K-MEANS MODEL
-                                   ↓
-                           PROPERTY SEGMENTS
-                                   ↓
-                    ┌──────────────┼──────────────┐
-                    ↓              ↓              ↓
-              SEGMENT SIZE   SEGMENT PROFILE   PCA 2D VIEW
-                    ↓              ↓              ↓
-                    └──────────────┼──────────────┘
-                                   ↓
-                        PROPERTY MARKET INSIGHTS
+                 PROPERTY UNIVERSE
+                        │
+                        ▼
+              PROPERTY INTELLIGENCE
+                        │
+                        ▼
+               PROPERTY SIGNATURES
+                        │
+                        ▼
+                SIMILARITY SPACE
+                        │
+                 ┌──────┴──────┐
+                 ▼             ▼
+          SEGMENT DISCOVERY   K DISCOVERY
+                 │             │
+                 └──────┬──────┘
+                        ▼
+              PROPERTY COMMUNITIES
+                        │
+          ┌─────────────┼──────────────┐
+          ▼             ▼              ▼
+    SEGMENT DNA    SPATIAL PATTERNS  PROPERTY MATCH
+          │             │              │
+          └─────────────┼──────────────┘
+                        ▼
+                 MARKET INSIGHTS
 ```
+
+---
+
+## 🌟 The Analytical Journey
+
+Unlike generic supervised machine-learning pipelines, this platform follows an **Unsupervised Property Similarity & Community Discovery** paradigm:
+
+1. **Property Universe**: Understands the complete housing inventory (14,620 raw records), dynamically computing price spectrums, structural living area ranges, building eras, and spatial bounds without hardcoded figures.
+2. **Property Intelligence & Data Trust**: Audits data hygiene (100% completeness across 20 segmentation features, isolating 1 documented typographical entry anomaly) and classifies attributes into domain-specific **Feature Roles** (Property Size, Layout, Property Quality, Property Age, Economic, Spatial).
+3. **Property Signatures**: Translates raw attributes into normalized relative indicators (0–100% position within the inventory) representing relative Price, Living Area, Room Capacity, Construction Grade, and Age.
+4. **Standardized Similarity Space**: Eliminates unit scale disparities using `StandardScaler` to construct an $N$-dimensional Euclidean similarity space.
+5. **K Discovery Lab**: Rigorously evaluates $K = 2 \dots 10$ using Within-Cluster Sum of Squares (Inertia) and Silhouette Scores to select the Official Recommended K based on transparent partition metrics.
+6. **Segment Discovery (K-Means)**: Iteratively optimizes cluster centers in standardized space until assignments stabilize.
+7. **Segment DNA**: Automatically extracts data-driven segment names (e.g. *Lower-Priced Compact Properties*, *Higher-Priced Spacious Properties*) and generates visual DNA fingerprints.
+8. **Spatial Intelligence**: Validates empirical geographic coordinates (Lat 52.39°N–53.01°N, Lon -114.71°W–-113.51°W) and documents dataset provenance without fabricating speculative location claims.
+9. **Property Match ("Find My Property Segment")**: Transforms user-simulated properties using the **already-fitted StandardScaler** (zero refitting) and assigns them to the closest learned community centroid with "Why This Match?" delta profiling.
+10. **Similar Property Finder**: Retrieves the top nearest-neighbor peers in the standardized feature space, strictly excluding the query property itself.
+11. **Market Insights & Exports**: Generates executive portfolio summaries and one-click CSV downloads.
 
 ---
 
@@ -47,98 +61,71 @@ The system discovers natural groupings among properties based on physical attrib
 ```text
 house_clustering/
 │
+├── config.py                          # Hyperparameters, column role mappings, paths
+├── main.py                            # End-to-end command-line pipeline runner
+├── app.py                             # Interactive Streamlit analytics dashboard
+├── test_system.py                     # Automated 10-point verification test suite
+├── requirements.txt                   # Dependency specifications
+│
 ├── data/
-│   └── house_price_india.csv          # Kaggle House Price Dataset of India (14,620 rows × 23 columns)
+│   └── house_price_india.csv          # Real dataset (14,620 rows × 23 columns)
 │
 ├── src/
 │   ├── __init__.py
-│   ├── config.py                      # Paths, random seeds, K ranges, feature keywords
-│   ├── utils.py                       # Logging formatters, directory management, dynamic column matching
-│   ├── data_loader.py                 # Module 1: Loading, validation, schema introspection
-│   ├── preprocessing.py               # Module 2: Outlier handling, feature scaling (StandardScaler)
-│   ├── eda.py                         # Module 3: Summary stats, heatmaps, distributions, scatter plots
-│   ├── optimal_k.py                   # Module 4: Inertia (Elbow) and Silhouette analysis for K=2..10
-│   ├── clustering.py                  # Module 5: Scikit-learn KMeans training and centroid extraction
-│   ├── visualization.py               # Module 6: 2D PCA projection, distribution, feature comparison
-│   ├── cluster_analysis.py            # Module 7: Dynamic statistical profiling and rule-based interpretation
-│   └── segment_naming.py              # Dynamic market segment naming and profile cards
+│   ├── utils.py                       # Console formatters, directory management
+│   ├── property_data.py               # Inventory loading and dynamic universe spectrums
+│   ├── property_intelligence.py       # Data Trust Panel, feature roles, single fitted StandardScaler
+│   ├── property_signature.py          # Normalized relative property signatures (0-100% bars)
+│   ├── similarity_engine.py           # Standardized Euclidean space, NearestNeighbors (self-excluded)
+│   ├── k_discovery.py                 # K Discovery Lab (K=2..10, Elbow inflection, Silhouette peak)
+│   ├── segment_engine.py              # K-Means community discovery, convergence, 2D PCA landscape
+│   ├── segment_dna.py                 # Dynamic naming engine, visual fingerprints, comparative profiling
+│   ├── spatial_intelligence.py        # Coordinate validation, provenance auditing, spatial filters
+│   ├── property_matcher.py            # Fitted scaler transform, bound validation, centroid assignment
+│   └── insight_engine.py              # Executive takeaways, architecture diagram, CSV exports
 │
-├── outputs/
-│   ├── plots/                         # Generated high-resolution visualization figures
-│   └── clustered_house_data.csv       # Final export dataset with assigned 'Cluster' and 'Segment Name'
-│
-├── app.py                             # Interactive Property Segmentation Analytics Web Dashboard
-├── main.py                            # Standalone end-to-end CLI execution pipeline
-├── requirements.txt                   # Verified dependencies
-└── README.md                          # Project documentation and guide
+└── outputs/
+    ├── clustered_house_data.csv       # Exported dataset with Cluster and Segment Name
+    └── segment_profiles.csv           # Comparative cross-segment profile table
 ```
-
----
-
-## 🧭 Dashboard Navigation Journey
-
-The web dashboard is structured around a real-estate business analytics journey:
-
-1. 🏠 **Market Overview:** Macro-level portfolio KPIs (Total Properties, Average/Median Price, Average Area, Average Bedrooms, Discovered Segments), dual price & area distribution charts, and data-driven market snapshot.
-2. 🏘 **Property Explorer:** Interactive multi-criteria search (price range, area range, bedrooms, bathrooms, condition, segment) and single property profile inspection.
-3. 📊 **Market Patterns:** Pre-clustering market relationships (Price vs Area, Price vs Bedrooms, Area vs Bedrooms, Price by Bedroom boxplots, Pearson correlation heatmap).
-4. 🧩 **Property Segments:** Profile cards for all discovered market segments, interactive 2D PCA cluster space visualization with projected centroids, and segment market share breakdown.
-5. ⚖ **Segment Comparison:** Side-by-side bar chart benchmarks (Price, Living Area, Bedrooms, Bathrooms by segment) and comprehensive cross-segment comparison table.
-6. 📍 **Segment Map / Spatial View:** Interactive geographic distribution map using the actual `Lattitude` and `Longitude` coordinates present in the Kaggle dataset.
-7. ⚙ **Clustering Analysis:** Technical section for K-selection (Elbow & Silhouette curves), official recommended K vs experimental exploration slider, and feature selection justification.
-8. 📁 **Dataset & Quality:** Data quality audit, schema preview, and missing/duplicate verification.
-9. 📑 **Property Segmentation Summary:** Executive overview and downloadable CSV deliverables.
-
----
-
-## ⚙️ Environment Setup & Local Execution (Windows)
-
-The project runs completely on your local Windows system without requiring cloud services or external APIs.
-
-### 1. Open Terminal & Navigate to Project
-
-```powershell
-cd C:\Users\Varsha\.gemini\antigravity\scratch\house_clustering
-```
-
-### 2. Activate Virtual Environment
-
-```powershell
-.venv\Scripts\activate
-```
-
-*(Or use `.venv\Scripts\python.exe` directly if execution policies are restricted).*
 
 ---
 
 ## 🚀 Running the Project
 
-### Option A: Command-Line Pipeline (`main.py`)
-
-Executes all 8 modules sequentially, logs progress in the terminal, saves plots in `outputs/plots/`, and exports `outputs/clustered_house_data.csv` with both `Cluster` and `Segment Name`:
-
+### 1. Terminal Pipeline Execution
+Run the full 8-stage unsupervised pipeline from PowerShell:
 ```powershell
-python main.py
+cd C:\Users\Varsha\.gemini\antigravity\scratch\house_clustering
+.\.venv\Scripts\python.exe main.py
 ```
 
-### Option B: Interactive Real-Estate Analytics Dashboard (`app.py`)
-
-Launches the multi-view property analytics web dashboard:
-
+### 2. Automated System Verification
+Verify all 10 analytical capabilities and confirm zero supervised metrics:
 ```powershell
-python -m streamlit run app.py
+.\.venv\Scripts\python.exe test_system.py
 ```
 
-*(Or `.\.venv\Scripts\streamlit run app.py`)*
-
-The dashboard will open automatically in your default browser at `http://localhost:8501`.
+### 3. Launching the Interactive Web Dashboard
+Start the Streamlit application:
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
+Open your browser to: **http://localhost:8501**
 
 ---
 
-## 🛠️ Technologies Used
+## 🧭 Dashboard Navigation Modules
 
-- **Language:** Python 3.13 / 3.14
-- **Data Manipulation:** `pandas`, `numpy`
-- **Machine Learning:** `scikit-learn` (`KMeans`, `StandardScaler`, `PCA`, `silhouette_score`)
-- **Visualizations:** `matplotlib`, `seaborn`, `plotly`
-- **Web Dashboard:** `streamlit`
+- **DISCOVER**:
+  - `01 — Property Universe`: Inventory overview, hero spectrum cards, interactive price vs. area explorer.
+  - `02 — Property Landscape`: 2D PCA projection of the similarity space with centroids and bivariate trendlines.
+  - `03 — Segment Discovery`: K Discovery Lab (Elbow & Silhouette curves), K-Means convergence, community discovery.
+  - `04 — Segment DNA`: Deep community profiles, visual DNA fingerprints (`███████░░░`), relative indicators.
+- **EXPLORE**:
+  - `05 — Spatial Intelligence`: Validated coordinate map, multi-attribute filtering, provenance documentation.
+  - `06 — Property Match`: Interactive simulator to match any property to its closest learned segment centroid.
+  - `07 — Similar Property Finder`: Nearest-neighbor peer lookup in standardized space (excluding query property).
+- **SYSTEM**:
+  - `08 — Method & Data Trust`: Data Trust Panel, real-estate feature roles, mathematical formulations.
+  - `09 — Insights & Export`: Executive takeaways, architecture diagram, CSV export downloads.
